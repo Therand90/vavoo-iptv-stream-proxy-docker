@@ -1,0 +1,177 @@
+name: Build upstream Docker image
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/build-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: vavoo-upstream-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Docker wrapper
+        uses: actions/checkout@v6
+
+      - name: Resolve latest upstream commit
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          upstream_sha="$(git ls-remote https://github.com/Haehnchen/vavoo-iptv-stream-proxy.git refs/heads/main | awk '{print $1}')"
+          if [[ -z "$upstream_sha" ]]; then
+            echo "Unable to resolve the upstream main branch" >&2
+            exit 1
+          fi
+
+          short_sha="${upstream_sha:0:12}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/vavoo-iptv-stream-proxy"
+
+          echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "local_image=vavoo-smoke:$short_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Decide whether a build is required
+        id: decision
+        shell: bash
+        env:
+          IMAGE: ${{ steps.upstream.outputs.image }}
+          SHORT_SHA: ${{ steps.upstream.outputs.short_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]] \
+             && docker buildx imagetools inspect "${IMAGE}:upstream-${SHORT_SHA}" >/dev/null 2>&1; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "The validated image for upstream ${SHORT_SHA} already exists."
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build image locally
+        if: steps.decision.outputs.build == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ steps.upstream.outputs.local_image }}
+          build-args: |
+            UPSTREAM_REPO=Haehnchen/vavoo-iptv-stream-proxy
+            UPSTREAM_REF=${{ steps.upstream.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            io.therand.upstream.repository=https://github.com/Haehnchen/vavoo-iptv-stream-proxy
+            io.therand.upstream.revision=${{ steps.upstream.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test catalog and French playlist
+        if: steps.decision.outputs.build == 'true'
+        shell: bash
+        env:
+          LOCAL_IMAGE: ${{ steps.upstream.outputs.local_image }}
+        run: |
+          set -euo pipefail
+
+          container="vavoo-smoke-${GITHUB_RUN_ID}"
+          cleanup() {
+            docker rm -f "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --publish 127.0.0.1:18888:8888 \
+            "$LOCAL_IMAGE" >/dev/null
+
+          ready=0
+          for _ in $(seq 1 45); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18888/countries \
+              --output /tmp/vavoo-countries.json \
+              && grep --quiet '"France"' /tmp/vavoo-countries.json; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ "$ready" -ne 1 ]]; then
+            echo "The catalog did not become ready." >&2
+            docker logs "$container" >&2 || true
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            "http://127.0.0.1:18888/channels.m3u8?country=France" \
+            --output /tmp/vavoo-france.m3u8
+
+          grep --quiet '^#EXTM3U' /tmp/vavoo-france.m3u8
+          grep --quiet '^#EXTINF' /tmp/vavoo-france.m3u8
+          grep --quiet '/stream/' /tmp/vavoo-france.m3u8
+
+      - name: Publish validated image
+        if: steps.decision.outputs.build == 'true'
+        shell: bash
+        env:
+          LOCAL_IMAGE: ${{ steps.upstream.outputs.local_image }}
+          IMAGE: ${{ steps.upstream.outputs.image }}
+          SHORT_SHA: ${{ steps.upstream.outputs.short_sha }}
+        run: |
+          set -euo pipefail
+
+          docker tag "$LOCAL_IMAGE" "${IMAGE}:upstream-${SHORT_SHA}"
+          docker tag "$LOCAL_IMAGE" "${IMAGE}:latest"
+
+          docker push "${IMAGE}:upstream-${SHORT_SHA}"
+          docker push "${IMAGE}:latest"
+
+      - name: Write workflow summary
+        if: always()
+        shell: bash
+        env:
+          IMAGE: ${{ steps.upstream.outputs.image }}
+          SHORT_SHA: ${{ steps.upstream.outputs.short_sha }}
+          SHOULD_BUILD: ${{ steps.decision.outputs.build }}
+        run: |
+          {
+            echo "## VAVOO Docker image"
+            echo
+            echo "- Upstream commit: \`${SHORT_SHA}\`"
+            echo "- Image: \`${IMAGE}\`"
+            if [[ "$SHOULD_BUILD" == "true" ]]; then
+              echo "- Result: build, smoke test and publication requested"
+            else
+              echo "- Result: existing validated image reused"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
