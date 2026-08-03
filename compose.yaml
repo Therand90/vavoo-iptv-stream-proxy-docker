@@ -1,0 +1,36 @@
+name: vavoo-iptv-stream-proxy
+
+services:
+  proxy:
+    image: ghcr.io/therand90/vavoo-iptv-stream-proxy:latest
+    container_name: vavoo-iptv-stream-proxy
+    restart: unless-stopped
+    pull_policy: always
+
+    command:
+      - --http-host
+      - 0.0.0.0
+      - --http-port
+      - "8888"
+      - --vavoo-language
+      - ${VAVOO_LANGUAGE:-en}
+      - --vavoo-region
+      - ${VAVOO_REGION:-US}
+      - --vavoo-url-list
+      - ${VAVOO_URL_LIST:-both}
+      - --redirect
+
+    ports:
+      - "${VAVOO_BIND_ADDRESS:-127.0.0.1}:${VAVOO_PORT:-8899}:8888"
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    stop_grace_period: 15s
