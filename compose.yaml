@@ -7,6 +7,9 @@ services:
     restart: unless-stopped
     pull_policy: always
 
+    environment:
+      VAVOO_CHANNELS_CACHE_TTL_SECONDS: ${VAVOO_CHANNELS_CACHE_TTL_SECONDS:-21600}
+
     command:
       - --http-host
       - 0.0.0.0
