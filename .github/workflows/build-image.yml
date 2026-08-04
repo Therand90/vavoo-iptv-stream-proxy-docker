@@ -4,12 +4,19 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 */6 * * *"
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - patches/**
+      - .github/workflows/build-image.yml
   push:
     branches:
       - main
     paths:
       - Dockerfile
       - .dockerignore
+      - patches/**
       - .github/workflows/build-image.yml
 
 permissions:
@@ -17,7 +24,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: vavoo-upstream-image
+  group: vavoo-upstream-image-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -50,6 +57,7 @@ jobs:
           echo "local_image=vavoo-smoke:$short_sha" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -94,6 +102,24 @@ jobs:
             io.therand.upstream.revision=${{ steps.upstream.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Verify local catalog-cache patch
+        if: steps.decision.outputs.build == 'true'
+        shell: bash
+        env:
+          LOCAL_IMAGE: ${{ steps.upstream.outputs.local_image }}
+        run: |
+          set -euo pipefail
+
+          docker run --rm --entrypoint node "$LOCAL_IMAGE" -e '
+            const fs = require("node:fs");
+            const source = fs.readFileSync("/app/index.js", "utf8");
+            if (!source.includes("CHANNELS_CACHE_TTL_SECONDS")) process.exit(1);
+            if (source.includes("cache.set(CHANNELS_CACHE_KEY, channels, 300);")) process.exit(1);
+          '
+
+          ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_CHANNELS_CACHE_TTL_SECONDS"')"
+          test "$ttl" = "21600"
 
       - name: Smoke-test catalog and French playlist
         if: steps.decision.outputs.build == 'true'
@@ -141,7 +167,7 @@ jobs:
           grep --quiet '/stream/' /tmp/vavoo-france.m3u8
 
       - name: Publish validated image
-        if: steps.decision.outputs.build == 'true'
+        if: steps.decision.outputs.build == 'true' && github.event_name != 'pull_request'
         shell: bash
         env:
           LOCAL_IMAGE: ${{ steps.upstream.outputs.local_image }}
@@ -169,7 +195,9 @@ jobs:
             echo
             echo "- Upstream commit: \`${SHORT_SHA}\`"
             echo "- Image: \`${IMAGE}\`"
-            if [[ "$SHOULD_BUILD" == "true" ]]; then
+            if [[ "$SHOULD_BUILD" == "true" && "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+              echo "- Result: build and smoke tests requested; no image publication from pull requests"
+            elif [[ "$SHOULD_BUILD" == "true" ]]; then
               echo "- Result: build, smoke test and publication requested"
             else
               echo "- Result: existing validated image reused"
