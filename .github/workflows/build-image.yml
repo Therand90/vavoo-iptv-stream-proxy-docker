@@ -182,7 +182,8 @@ jobs:
           grep --quiet '^#EXTINF' /tmp/vavoo-france.m3u8
           grep --quiet '/stream/' /tmp/vavoo-france.m3u8
 
-          stream_url="$(grep '/stream/' /tmp/vavoo-france.m3u8 | head -n 1)"
+          stream_url="$(awk '/\/stream\// { print; exit }' /tmp/vavoo-france.m3u8)"
+          stream_url="${stream_url%%|*}"
           test -n "$stream_url"
 
           curl --fail --silent --show-error \
