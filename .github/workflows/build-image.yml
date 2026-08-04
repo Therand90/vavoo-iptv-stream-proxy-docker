@@ -103,7 +103,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Verify local catalog-cache patch
+      - name: Verify local playback patches
         if: steps.decision.outputs.build == 'true'
         shell: bash
         env:
@@ -114,14 +114,30 @@ jobs:
           docker run --rm --entrypoint node "$LOCAL_IMAGE" -e '
             const fs = require("node:fs");
             const source = fs.readFileSync("/app/index.js", "utf8");
-            if (!source.includes("CHANNELS_CACHE_TTL_SECONDS")) process.exit(1);
-            if (source.includes("cache.set(CHANNELS_CACHE_KEY, channels, 300);")) process.exit(1);
+            const required = [
+              "CHANNELS_CACHE_TTL_SECONDS",
+              "STREAM_URL_TTL_SECONDS",
+              "/hls-channel/:id",
+              "renewable hls master",
+              "Buffer.from(await upstream.arrayBuffer())"
+            ];
+            for (const marker of required) {
+              if (!source.includes(marker)) {
+                console.error(`missing patch marker: ${marker}`);
+                process.exit(1);
+              }
+            }
+            if (source.includes("cache.set(CHANNELS_CACHE_KEY, channels, 300);")) {
+              process.exit(1);
+            }
           '
 
-          ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_CHANNELS_CACHE_TTL_SECONDS"')"
-          test "$ttl" = "21600"
+          catalog_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_CHANNELS_CACHE_TTL_SECONDS"')"
+          stream_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_STREAM_URL_TTL_SECONDS"')"
+          test "$catalog_ttl" = "21600"
+          test "$stream_ttl" = "3000"
 
-      - name: Smoke-test catalog and French playlist
+      - name: Smoke-test catalog and renewable HLS entry point
         if: steps.decision.outputs.build == 'true'
         shell: bash
         env:
@@ -165,6 +181,18 @@ jobs:
           grep --quiet '^#EXTM3U' /tmp/vavoo-france.m3u8
           grep --quiet '^#EXTINF' /tmp/vavoo-france.m3u8
           grep --quiet '/stream/' /tmp/vavoo-france.m3u8
+
+          stream_url="$(awk '/\/stream\// { print; exit }' /tmp/vavoo-france.m3u8)"
+          stream_url="${stream_url%%|*}"
+          test -n "$stream_url"
+
+          curl --fail --silent --show-error \
+            --user-agent 'VAVOO/2.6' \
+            "$stream_url" \
+            --output /tmp/vavoo-master.m3u8
+
+          grep --quiet '^#EXTM3U' /tmp/vavoo-master.m3u8
+          grep --quiet '/hls-channel/' /tmp/vavoo-master.m3u8
 
       - name: Publish validated image
         if: steps.decision.outputs.build == 'true' && github.event_name != 'pull_request'

@@ -10,6 +10,7 @@ ARG UPSTREAM_REF=main
 WORKDIR /src
 
 COPY patches/extend-catalog-cache.mjs /tmp/extend-catalog-cache.mjs
+COPY patches/renew-hourly-hls.mjs /tmp/renew-hourly-hls.mjs
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gzip tar \
@@ -19,6 +20,7 @@ RUN apt-get update \
        | tar --extract --gzip --strip-components=1 --directory /src \
     && test -f package.json \
     && node /tmp/extend-catalog-cache.mjs /src/index.js \
+    && node /tmp/renew-hourly-hls.mjs /src/index.js \
     && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
     && node --check index.js \
     && npm cache clean --force
@@ -35,7 +37,8 @@ LABEL org.opencontainers.image.title="VAVOO IPTV Stream Proxy" \
       io.therand.upstream.revision="${UPSTREAM_REF}"
 
 ENV NODE_ENV=production \
-    VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600
+    VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600 \
+    VAVOO_STREAM_URL_TTL_SECONDS=3000
 
 WORKDIR /app
 
@@ -50,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
 
 ENTRYPOINT ["node", "index.js"]
 
-CMD ["--http-host", "0.0.0.0", "--http-port", "8888", "--vavoo-language", "en", "--vavoo-region", "US", "--vavoo-url-list", "both", "--redirect"]
+CMD ["--http-host", "0.0.0.0", "--http-port", "8888", "--vavoo-language", "en", "--vavoo-region", "US", "--vavoo-url-list", "both"]

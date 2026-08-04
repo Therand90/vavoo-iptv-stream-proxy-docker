@@ -9,6 +9,7 @@ services:
 
     environment:
       VAVOO_CHANNELS_CACHE_TTL_SECONDS: ${VAVOO_CHANNELS_CACHE_TTL_SECONDS:-21600}
+      VAVOO_STREAM_URL_TTL_SECONDS: ${VAVOO_STREAM_URL_TTL_SECONDS:-3000}
 
     command:
       - --http-host
@@ -21,7 +22,6 @@ services:
       - ${VAVOO_REGION:-US}
       - --vavoo-url-list
       - ${VAVOO_URL_LIST:-both}
-      - --redirect
 
     ports:
       - "${VAVOO_BIND_ADDRESS:-127.0.0.1}:${VAVOO_PORT:-8899}:8888"
