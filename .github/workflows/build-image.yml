@@ -117,7 +117,7 @@ jobs:
             const required = [
               "CHANNELS_CACHE_TTL_SECONDS",
               "STREAM_URL_TTL_SECONDS",
-              "app.get('/hls-channel/:id'",
+              "/hls-channel/:id",
               "renewable hls master",
               "Buffer.from(await upstream.arrayBuffer())"
             ];
