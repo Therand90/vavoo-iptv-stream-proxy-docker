@@ -9,6 +9,8 @@ ARG UPSTREAM_REF=main
 
 WORKDIR /src
 
+COPY patches/extend-catalog-cache.mjs /tmp/extend-catalog-cache.mjs
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gzip tar \
     && rm -rf /var/lib/apt/lists/* \
@@ -16,6 +18,7 @@ RUN apt-get update \
        "https://github.com/${UPSTREAM_REPO}/archive/${UPSTREAM_REF}.tar.gz" \
        | tar --extract --gzip --strip-components=1 --directory /src \
     && test -f package.json \
+    && node /tmp/extend-catalog-cache.mjs /src/index.js \
     && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
     && node --check index.js \
     && npm cache clean --force
@@ -31,7 +34,8 @@ LABEL org.opencontainers.image.title="VAVOO IPTV Stream Proxy" \
       io.therand.upstream.repository="https://github.com/${UPSTREAM_REPO}" \
       io.therand.upstream.revision="${UPSTREAM_REF}"
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600
 
 WORKDIR /app
 
