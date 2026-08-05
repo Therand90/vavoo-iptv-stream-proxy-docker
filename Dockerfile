@@ -13,6 +13,7 @@ COPY patches/extend-catalog-cache.mjs /tmp/extend-catalog-cache.mjs
 COPY patches/renew-hourly-hls.mjs /tmp/renew-hourly-hls.mjs
 COPY patches/harden-hls-retries.mjs /tmp/harden-hls-retries.mjs
 COPY patches/harden-hls-assets.mjs /tmp/harden-hls-assets.mjs
+COPY patches/prefetch-hls-assets.mjs /tmp/prefetch-hls-assets.mjs
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gzip tar \
@@ -25,6 +26,9 @@ RUN apt-get update \
     && node /tmp/renew-hourly-hls.mjs /src/index.js \
     && node /tmp/harden-hls-retries.mjs /src/index.js \
     && node /tmp/harden-hls-assets.mjs /src/index.js \
+    && node /tmp/prefetch-hls-assets.mjs /src/index.js \
+    && grep -q "hls asset prefetched" /src/index.js \
+    && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
     && node --check index.js \
     && npm cache clean --force
