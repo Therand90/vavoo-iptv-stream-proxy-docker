@@ -29,6 +29,7 @@ jobs:
             "CONTRIBUTING.md:CONTRIBUTING.fr.md"
             "THIRD_PARTY_NOTICES.md:THIRD_PARTY_NOTICES.fr.md"
             "docs/CONFIGURATION.md:docs/CONFIGURATION.fr.md"
+            "docs/LIBREELEC.md:docs/LIBREELEC.fr.md"
           )
 
           for pair in "${pairs[@]}"; do
@@ -40,6 +41,8 @@ jobs:
 
           grep --quiet '\[Français\]' README.md
           grep --quiet '\[English\]' README.fr.md
+          grep --quiet '\[Français\]' docs/LIBREELEC.md
+          grep --quiet '\[English\]' docs/LIBREELEC.fr.md
 
       - name: Reject tracked local secrets / Refuser les secrets locaux suivis
         shell: bash
@@ -89,6 +92,16 @@ jobs:
               print("\n".join(failures), file=sys.stderr)
               raise SystemExit(1)
           PY
+
+      - name: Validate LibreELEC helper / Valider le gestionnaire LibreELEC
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/libreelec-vavoo.sh
+          sh -n scripts/libreelec-vavoo.sh
+          grep --quiet 'docker run -d' scripts/libreelec-vavoo.sh
+          grep --quiet 'no-new-privileges:true' scripts/libreelec-vavoo.sh
+          grep --quiet 'VAVOO_HLS_PROXY_SECRET' .env.example
 
       - name: Validate Docker Compose / Valider Docker Compose
         shell: bash

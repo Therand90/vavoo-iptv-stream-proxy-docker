@@ -41,6 +41,8 @@ Each patch checks that the expected upstream source appears exactly once. An inc
 
 ## Quick start
 
+### Standard Linux with Docker Compose
+
 ```bash
 cp .env.example .env
 docker compose pull
@@ -48,7 +50,16 @@ docker compose up -d
 docker compose ps
 ```
 
-The default Compose configuration listens only on the local loopback interface:
+### LibreELEC without Docker Compose
+
+Some LibreELEC Docker add-on installations provide the Docker engine without the `docker compose` command. Use the repository's native `/bin/sh` manager instead:
+
+- [LibreELEC installation guide](docs/LIBREELEC.md)
+- [Guide d’installation LibreELEC](docs/LIBREELEC.fr.md)
+
+The currently published image targets `linux/amd64`, so this path is intended for x86_64 LibreELEC systems such as Intel and AMD mini-PCs.
+
+The default configuration listens only on the local loopback interface:
 
 ```text
 http://127.0.0.1:8899
@@ -104,7 +115,7 @@ The repository also protects the build and release path:
 - third-party GitHub Actions are pinned to verified full commit SHAs;
 - the official Node.js base image is pinned by digest and monitored by Dependabot;
 - the upstream application is downloaded from an exact commit and installed with its lockfile through `npm ci`;
-- a lightweight policy workflow checks the bilingual documentation, secret hygiene, immutable build inputs and Compose configuration on every pull request;
+- a lightweight policy workflow checks the bilingual documentation, secret hygiene, immutable build inputs, helper script syntax and Compose configuration on every pull request;
 - publication permissions are isolated in a dedicated job;
 - published images include BuildKit provenance and an attached software bill of materials (SBOM).
 
@@ -142,11 +153,22 @@ The build requires the upstream `package-lock.json` and uses `npm ci`; it fails 
 
 ## Updating
 
+With Docker Compose:
+
 ```bash
 docker compose pull
 docker compose up -d --remove-orphans
 docker compose ps
 ```
+
+On LibreELEC without Compose:
+
+```sh
+cd /storage/docker/vavoo-iptv-stream-proxy
+./libreelec-vavoo.sh update
+```
+
+The LibreELEC manager keeps a temporary rollback during validation and removes only unused historical images produced by this repository after a successful update.
 
 If the GHCR package is private, authenticate with a token that has package read permission:
 
@@ -159,6 +181,7 @@ Never commit the token or place it directly in `compose.yaml`.
 ## Documentation
 
 - [Configuration](docs/CONFIGURATION.md)
+- [LibreELEC installation](docs/LIBREELEC.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
