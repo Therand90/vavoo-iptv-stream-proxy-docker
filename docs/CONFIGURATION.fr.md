@@ -51,4 +51,4 @@ docker compose up -d --remove-orphans
 docker compose ps
 ```
 
-Pour un déploiement de production reproductible, privilégiez un tag immuable `upstream-<SHA>` ou un digest d’image plutôt que `latest`.
+Le tag `upstream-<SHA>` identifie la révision du code source amont, mais il peut être actualisé lorsque cette image ou son image de base change. Utilisez le digest de l’image lorsqu’une reproductibilité octet par octet est nécessaire.
