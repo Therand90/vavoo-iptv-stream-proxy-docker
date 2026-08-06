@@ -24,7 +24,7 @@ fail() {
 usage() {
   cat <<'USAGE'
 Usage / Utilisation:
-  libreelec-vavoo.sh install    Install or recreate the container / Installer ou recréer le conteneur
+  libreelec-vavoo.sh install    Install a new container / Installer un nouveau conteneur
   libreelec-vavoo.sh update     Pull, validate and apply the latest image / Télécharger, valider et appliquer la dernière image
   libreelec-vavoo.sh status     Show container and endpoint status / Afficher l'état du conteneur et du service
   libreelec-vavoo.sh logs       Show the latest container logs / Afficher les derniers journaux
@@ -170,12 +170,37 @@ cleanup_images() {
   say "Unused VAVOO images removed / Anciennes images VAVOO inutilisées supprimées."
 }
 
+restore_previous_image() {
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+
+  if ! docker image inspect "$ROLLBACK_IMAGE" >/dev/null 2>&1; then
+    say "Rollback image unavailable / Image de secours indisponible."
+    return 1
+  fi
+
+  if ! run_container "$ROLLBACK_IMAGE" >/dev/null; then
+    say "Rollback container creation failed / Échec de création du conteneur de secours."
+    return 1
+  fi
+
+  if wait_until_ready; then
+    say "Previous image restored / Image précédente restaurée."
+    return 0
+  fi
+
+  say "Previous image restarted but endpoint validation failed / Image précédente redémarrée mais validation du service échouée."
+  return 1
+}
+
 install_container() {
   load_config
+
+  if docker inspect "$NAME" >/dev/null 2>&1; then
+    fail "container already exists; use update / le conteneur existe déjà ; utilisez update"
+  fi
+
   say "Pulling validated image / Téléchargement de l'image validée..."
   docker pull "$IMAGE"
-
-  docker rm -f "$NAME" >/dev/null 2>&1 || true
   run_container "$IMAGE" >/dev/null
 
   say "Waiting for the catalog / Attente du catalogue..."
@@ -212,19 +237,16 @@ update_container() {
 
   if ! run_container "$IMAGE" >/dev/null; then
     say "New container creation failed; restoring previous image / Échec de création ; restauration de l'image précédente..."
-    docker rm -f "$NAME" >/dev/null 2>&1 || true
-    run_container "$ROLLBACK_IMAGE" >/dev/null
-    fail "update failed and rollback was started / mise à jour échouée et retour arrière démarré"
+    restore_previous_image || true
+    fail "update failed / mise à jour échouée"
   fi
 
   say "Validating the new container / Validation du nouveau conteneur..."
   if ! wait_until_ready; then
     docker logs --tail 100 "$NAME" >&2 || true
     say "Validation failed; restoring previous image / Échec de validation ; restauration de l'image précédente..."
-    docker rm -f "$NAME" >/dev/null 2>&1 || true
-    run_container "$ROLLBACK_IMAGE" >/dev/null
-    wait_until_ready || true
-    fail "update failed; previous image restored / mise à jour échouée ; image précédente restaurée"
+    restore_previous_image || true
+    fail "update failed / mise à jour échouée"
   fi
 
   docker image rm "$ROLLBACK_IMAGE" >/dev/null 2>&1 || true
@@ -238,6 +260,7 @@ main() {
   require_command docker
   require_command awk
   require_command curl
+  require_command sort
 
   command_name="${1:-help}"
   case "$command_name" in
