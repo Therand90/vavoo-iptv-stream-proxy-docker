@@ -24,6 +24,21 @@ This service is designed for local or trusted private-network use.
 
 The local HLS proxy uses signed internal URLs to prevent callers from turning `/hls-proxy` into an arbitrary HTTP proxy. This protection is defense in depth and does not make public exposure recommended or supported.
 
+## Supply-chain controls
+
+The repository uses several controls to reduce build and publication risk:
+
+- every third-party GitHub Action is pinned to a verified full commit SHA;
+- the official Node.js base image is pinned to a digest and monitored by Dependabot;
+- the upstream application is fetched from an exact commit and installed with its lockfile using `npm ci`;
+- patch scripts validate exact source anchors and fail the build when the expected upstream implementation changes;
+- pull requests have read-only workflow permissions and cannot publish images;
+- package-write permission is granted only to the dedicated publication job;
+- published images include BuildKit provenance and an attached SBOM;
+- the always-on repository policy workflow validates documentation pairs, secret hygiene, immutable build inputs and Docker Compose.
+
+Users who require reproducible deployment should pin the published image by digest.
+
 ## Upstream trust
 
 The image downloads a precise upstream commit during validated CI builds and applies fail-closed patch scripts. A changed upstream source that no longer matches the expected anchors causes the build to fail instead of silently producing an unpatched image.
