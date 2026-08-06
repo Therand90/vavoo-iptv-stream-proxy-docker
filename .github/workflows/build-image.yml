@@ -8,6 +8,8 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
+      - .env.example
+      - compose.yaml
       - patches/**
       - .github/workflows/build-image.yml
   push:
@@ -16,6 +18,8 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
+      - .env.example
+      - compose.yaml
       - patches/**
       - .github/workflows/build-image.yml
 
@@ -34,6 +38,14 @@ jobs:
     steps:
       - name: Check out Docker wrapper
         uses: actions/checkout@v6
+
+      - name: Validate Docker Compose configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          docker compose config --quiet
+          rm -f .env
 
       - name: Resolve latest upstream commit
         id: upstream
@@ -76,12 +88,22 @@ jobs:
         run: |
           set -euo pipefail
 
+          weekly_refresh=false
           if [[ "$GITHUB_EVENT_NAME" == "schedule" ]] \
+             && [[ "$(date -u +%u)" == "7" ]] \
+             && [[ "$(date -u +%H)" == "00" ]]; then
+            weekly_refresh=true
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]] \
+             && [[ "$weekly_refresh" != "true" ]] \
              && docker buildx imagetools inspect "${IMAGE}:upstream-${SHORT_SHA}" >/dev/null 2>&1; then
             echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "weekly_refresh=false" >> "$GITHUB_OUTPUT"
             echo "The validated image for upstream ${SHORT_SHA} already exists."
           else
             echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "weekly_refresh=$weekly_refresh" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build image locally
@@ -98,6 +120,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
             io.therand.upstream.repository=https://github.com/Haehnchen/vavoo-iptv-stream-proxy
             io.therand.upstream.revision=${{ steps.upstream.outputs.sha }}
           cache-from: type=gha
@@ -117,9 +140,16 @@ jobs:
             const required = [
               "CHANNELS_CACHE_TTL_SECONDS",
               "STREAM_URL_TTL_SECONDS",
+              "VAVOO_PLAYLIST_CACHE_TTL_SECONDS",
+              "VAVOO_HLS_ASSET_CACHE_TTL_SECONDS",
+              "VAVOO_HLS_ASSET_MAX_CACHE_BYTES",
+              "VAVOO_HLS_PREFETCH_SEGMENT_COUNT",
+              "HLS_PROXY_SECRET",
+              "invalid hls proxy signature",
               "/hls-channel/:id",
               "renewable hls master",
-              "Buffer.from(await upstream.arrayBuffer())"
+              "Buffer.from(await upstream.arrayBuffer())",
+              "removeListener(\"close\", onSocketClose)".replaceAll("\"", "\'")
             ];
             for (const marker of required) {
               if (!source.includes(marker)) {
@@ -134,8 +164,17 @@ jobs:
 
           catalog_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_CHANNELS_CACHE_TTL_SECONDS"')"
           stream_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_STREAM_URL_TTL_SECONDS"')"
+          playlist_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_PLAYLIST_CACHE_TTL_SECONDS"')"
+          asset_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_HLS_ASSET_CACHE_TTL_SECONDS"')"
+          asset_max="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_HLS_ASSET_MAX_CACHE_BYTES"')"
+          prefetch_count="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_HLS_PREFETCH_SEGMENT_COUNT"')"
+
           test "$catalog_ttl" = "21600"
           test "$stream_ttl" = "3000"
+          test "$playlist_ttl" = "300"
+          test "$asset_ttl" = "45"
+          test "$asset_max" = "12582912"
+          test "$prefetch_count" = "2"
 
       - name: Smoke-test catalog and renewable HLS entry point
         if: steps.decision.outputs.build == 'true'
@@ -173,6 +212,15 @@ jobs:
             docker logs "$container" >&2 || true
             exit 1
           fi
+
+          unsigned_status="$(curl --silent --show-error \
+            --output /tmp/vavoo-unsigned-proxy.txt \
+            --write-out '%{http_code}' \
+            --get \
+            --data-urlencode 'url=https://example.com/test.m3u8' \
+            http://127.0.0.1:18888/hls-proxy)"
+          test "$unsigned_status" = "403"
+          grep --quiet 'invalid hls proxy signature' /tmp/vavoo-unsigned-proxy.txt
 
           curl --fail --silent --show-error \
             "http://127.0.0.1:18888/channels.m3u8?country=France" \
@@ -217,6 +265,7 @@ jobs:
           IMAGE: ${{ steps.upstream.outputs.image }}
           SHORT_SHA: ${{ steps.upstream.outputs.short_sha }}
           SHOULD_BUILD: ${{ steps.decision.outputs.build }}
+          WEEKLY_REFRESH: ${{ steps.decision.outputs.weekly_refresh }}
         run: |
           {
             echo "## VAVOO Docker image"
@@ -225,8 +274,10 @@ jobs:
             echo "- Image: \`${IMAGE}\`"
             if [[ "$SHOULD_BUILD" == "true" && "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
               echo "- Result: build and smoke tests requested; no image publication from pull requests"
+            elif [[ "$SHOULD_BUILD" == "true" && "$WEEKLY_REFRESH" == "true" ]]; then
+              echo "- Result: weekly base-image refresh, smoke tests and publication requested"
             elif [[ "$SHOULD_BUILD" == "true" ]]; then
-              echo "- Result: build, smoke test and publication requested"
+              echo "- Result: build, smoke tests and publication requested"
             else
               echo "- Result: existing validated image reused"
             fi
