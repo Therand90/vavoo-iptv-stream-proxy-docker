@@ -15,13 +15,13 @@ The image downloads a precise upstream commit, applies auditable fail-closed pla
 ghcr.io/therand90/vavoo-iptv-stream-proxy:latest
 ```
 
-Every validated upstream revision also receives an immutable reference-style tag:
+Every validated upstream revision also receives an upstream-revision tag:
 
 ```text
 ghcr.io/therand90/vavoo-iptv-stream-proxy:upstream-<first-12-characters-of-SHA>
 ```
 
-Use `latest` for convenience. Prefer an `upstream-*` tag or an image digest when a reproducible deployment matters.
+Use `latest` for convenience. The `upstream-*` tag identifies the upstream source revision but may be refreshed when this wrapper or its base image changes. Use the image digest when byte-for-byte reproducibility matters.
 
 ## What this wrapper adds
 
