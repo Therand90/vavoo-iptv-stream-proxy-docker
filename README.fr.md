@@ -15,13 +15,13 @@ L’image télécharge un commit amont précis, applique des correctifs de lectu
 ghcr.io/therand90/vavoo-iptv-stream-proxy:latest
 ```
 
-Chaque révision amont validée reçoit également un tag de référence immuable :
+Chaque révision amont validée reçoit également un tag identifiant cette révision :
 
 ```text
 ghcr.io/therand90/vavoo-iptv-stream-proxy:upstream-<12-premiers-caracteres-du-SHA>
 ```
 
-Utilisez `latest` pour sa simplicité. Préférez un tag `upstream-*` ou un digest d’image lorsqu’un déploiement reproductible est important.
+Utilisez `latest` pour sa simplicité. Le tag `upstream-*` identifie la révision du code source amont, mais il peut être actualisé lorsque cette image ou son image de base change. Utilisez le digest de l’image lorsqu’une reproductibilité octet par octet est importante.
 
 ## Apports de cette image
 
