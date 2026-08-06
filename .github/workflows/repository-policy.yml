@@ -1,0 +1,99 @@
+name: Repository policy checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Repository policy checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository / Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate bilingual documentation / Valider la documentation bilingue
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pairs=(
+            "README.md:README.fr.md"
+            "SECURITY.md:SECURITY.fr.md"
+            "CONTRIBUTING.md:CONTRIBUTING.fr.md"
+            "THIRD_PARTY_NOTICES.md:THIRD_PARTY_NOTICES.fr.md"
+            "docs/CONFIGURATION.md:docs/CONFIGURATION.fr.md"
+          )
+
+          for pair in "${pairs[@]}"; do
+            english="${pair%%:*}"
+            french="${pair#*:}"
+            test -f "$english"
+            test -f "$french"
+          done
+
+          grep --quiet '\[Français\]' README.md
+          grep --quiet '\[English\]' README.fr.md
+
+      - name: Reject tracked local secrets / Refuser les secrets locaux suivis
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "A real .env file must never be committed." >&2
+            exit 1
+          fi
+
+          test -f .env.example
+          grep --quiet '^\.env$' .gitignore
+
+      - name: Verify immutable build inputs / Vérifier les entrées immuables
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep --extended-regexp --quiet \
+            '^ARG NODE_IMAGE=[^[:space:]]+@sha256:[0-9a-f]{64}$' \
+            Dockerfile
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          sha = re.compile(r"^[0-9a-f]{40}$")
+          failures = []
+
+          for workflow in sorted(Path(".github/workflows").glob("*.y*ml")):
+              for number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
+                  stripped = line.strip()
+                  if not stripped.startswith("uses:"):
+                      continue
+
+                  target = stripped.split("uses:", 1)[1].strip().split()[0]
+                  if target.startswith("./"):
+                      continue
+
+                  if "@" not in target or not sha.fullmatch(target.rsplit("@", 1)[1]):
+                      failures.append(f"{workflow}:{number}: {target}")
+
+          if failures:
+              print("GitHub Actions must be pinned to full commit SHAs:", file=sys.stderr)
+              print("\n".join(failures), file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
+      - name: Validate Docker Compose / Valider Docker Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          trap 'rm -f .env' EXIT
+          docker compose config --quiet
