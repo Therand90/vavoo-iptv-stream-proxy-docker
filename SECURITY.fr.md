@@ -24,6 +24,21 @@ Ce service est conçu pour une utilisation locale ou sur un réseau privé de co
 
 Le proxy HLS local utilise des URL internes signées afin d’empêcher l’utilisation de `/hls-proxy` comme proxy HTTP arbitraire. Cette protection constitue une défense supplémentaire, mais ne rend pas l’exposition publique recommandée ni prise en charge.
 
+## Contrôles de la chaîne d’approvisionnement
+
+Le dépôt applique plusieurs contrôles afin de réduire les risques liés à la construction et à la publication :
+
+- chaque GitHub Action tierce est épinglée sur un SHA de commit complet vérifié ;
+- l’image Node.js officielle est épinglée sur un digest et surveillée par Dependabot ;
+- l’application amont est récupérée depuis un commit exact et installée avec son lockfile via `npm ci` ;
+- les scripts de correctif valident des ancres de code exactes et interrompent la construction lorsque l’implémentation amont attendue change ;
+- les workflows de pull request disposent uniquement de permissions de lecture et ne peuvent pas publier d’image ;
+- la permission d’écriture des paquets est accordée uniquement au job de publication dédié ;
+- les images publiées incluent une provenance BuildKit et un SBOM joint ;
+- le workflow permanent de politique du dépôt valide les paires de documentation, l’hygiène des secrets, les entrées de construction immuables et Docker Compose.
+
+Les utilisateurs qui exigent un déploiement reproductible doivent épingler l’image publiée par digest.
+
 ## Confiance accordée au projet amont
 
 L’image télécharge un commit amont précis lors des constructions validées par la CI et applique des scripts de correctif qui échouent de manière sûre. Si le code amont ne correspond plus aux ancres attendues, la construction échoue au lieu de produire silencieusement une image non corrigée.
