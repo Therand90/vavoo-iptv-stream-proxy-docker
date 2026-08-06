@@ -149,7 +149,8 @@ jobs:
               "/hls-channel/:id",
               "renewable hls master",
               "Buffer.from(await upstream.arrayBuffer())",
-              "removeListener(\"close\", onSocketClose)".replaceAll("\"", "\'")
+              "removeListener(",
+              "onSocketClose"
             ];
             for (const marker of required) {
               if (!source.includes(marker)) {
