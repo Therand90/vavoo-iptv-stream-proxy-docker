@@ -1,49 +1,42 @@
+[English](README.md) | [Français](README.fr.md)
+
 # VAVOO IPTV Stream Proxy — Docker
 
-Image Docker reproductible pour le projet amont [`Haehnchen/vavoo-iptv-stream-proxy`](https://github.com/Haehnchen/vavoo-iptv-stream-proxy).
+A validated Docker wrapper for the upstream [`Haehnchen/vavoo-iptv-stream-proxy`](https://github.com/Haehnchen/vavoo-iptv-stream-proxy) project.
 
-L’image récupère un commit précis du dépôt original pendant la construction, applique un petit correctif local auditable, installe les dépendances avec Node.js 24, exécute des tests simples, puis publie l’image validée sur GitHub Container Registry.
+The image downloads a precise upstream commit, applies auditable fail-closed playback patches, installs the locked Node.js dependencies, runs syntax and live smoke tests, and publishes the image to GitHub Container Registry only after validation.
 
-## Image
+> [!IMPORTANT]
+> This is an unofficial community project and is not affiliated with, endorsed by or operated by VAVOO or the upstream author. The repository contains software only; it does not bundle television channels or audiovisual content.
+
+## Container image
 
 ```text
 ghcr.io/therand90/vavoo-iptv-stream-proxy:latest
 ```
 
-Chaque version validée reçoit aussi un tag lié au commit amont :
+Every validated upstream revision also receives an upstream-revision tag:
 
 ```text
-ghcr.io/therand90/vavoo-iptv-stream-proxy:upstream-<12-premiers-caracteres-du-SHA>
+ghcr.io/therand90/vavoo-iptv-stream-proxy:upstream-<first-12-characters-of-SHA>
 ```
 
-## Correctif local du cache catalogue
+Use `latest` for convenience. The `upstream-*` tag identifies the upstream source revision but may be refreshed when this wrapper or its base image changes. Use the image digest when byte-for-byte reproducibility matters.
 
-Le projet amont conserve le catalogue des chaînes pendant cinq minutes. En mode `--redirect`, une URL signée de lecture peut expirer après environ une heure. Kodi redemande alors une URL fraîche au proxy, mais le rechargement complet de plus de dix mille chaînes peut prendre plusieurs secondes et faire expirer la tentative de reprise du lecteur.
+## What this wrapper adds
 
-Cette image porte donc la durée du cache du catalogue à six heures par défaut :
+The upstream proxy provides the catalog, stable local channel IDs and on-demand stream resolution. This wrapper adds Docker packaging and several Kodi-oriented playback improvements:
 
-```text
-VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600
-```
+1. **Long-lived catalog cache** — keeps the channel catalog for six hours by default so a player restart does not wait for a full catalog reload.
+2. **Renewable HLS entry point** — keeps Kodi on a stable local `/hls-channel/:id` URL and refreshes signed upstream stream URLs before their usual hourly expiry.
+3. **Playlist recovery** — retries short upstream failures and can serve the last valid playlist while obtaining a fresh signed URL.
+4. **Media-segment recovery** — retries HLS assets, buffers successful responses and keeps a short bounded memory cache for immediate player retries.
+5. **Segment prefetching** — preloads the most recent playlist segments and shares in-flight downloads with the player to reduce brief stalls.
+6. **Signed internal proxy URLs** — signs generated `/hls-proxy` URLs so the endpoint cannot be used as an arbitrary unsigned HTTP proxy.
 
-Le minimum accepté est de 300 secondes. Le correctif ne met pas en cache les URL signées des flux : chaque ouverture ou reprise continue de demander une URL de lecture fraîche.
+Each patch checks that the expected upstream source appears exactly once. An incompatible upstream change stops the build instead of silently publishing a partially patched image.
 
-Le script de construction vérifie que le code amont attendu n’a pas changé avant d’appliquer le correctif. Une modification incompatible du projet original fait échouer la construction au lieu de produire silencieusement une image non corrigée.
-
-## Synchronisation automatique
-
-Le workflow GitHub Actions :
-
-1. vérifie la branche `main` du dépôt original toutes les six heures ;
-2. compare son commit avec les images déjà publiées ;
-3. construit une nouvelle image lorsqu’un nouveau commit est détecté, ou lorsque le Dockerfile ou les correctifs locaux changent ;
-4. vérifie la présence du correctif local ;
-5. démarre temporairement l’image et vérifie `/countries` ainsi que la playlist française ;
-6. publie les tags `upstream-<SHA>` et `latest` uniquement si les tests réussissent.
-
-Les pull requests exécutent la construction et les tests sans publier d’image. Le workflow peut aussi être lancé manuellement depuis l’onglet **Actions**.
-
-## Déploiement avec Docker Compose
+## Quick start
 
 ```bash
 cp .env.example .env
@@ -52,42 +45,111 @@ docker compose up -d
 docker compose ps
 ```
 
-Par défaut, le service écoute uniquement sur la boucle locale :
+The default Compose configuration listens only on the local loopback interface:
 
 ```text
 http://127.0.0.1:8899
 ```
 
-Endpoints utiles :
+Useful endpoints:
 
 ```text
-http://<adresse>:8899/countries
-http://<adresse>:8899/channels.m3u8?country=France
+http://127.0.0.1:8899/countries
+http://127.0.0.1:8899/channels.m3u8
+http://127.0.0.1:8899/channels.m3u8?country=France
 ```
 
-Le conteneur démarre avec `--redirect`. Le proxy résout donc une URL fraîche au lancement d’une chaîne, puis redirige les lecteurs dont le User-Agent contient `VAVOO` vers le flux amont.
+The default mode keeps HLS playback inside the local proxy. It does **not** enable `--redirect`, because direct redirection would remove the proxy from the playback path and prevent transparent URL renewal.
 
-## Accès à une image privée
+## Configuration
 
-Les paquets GHCR sont privés lors de leur première publication. La machine Docker doit alors être authentifiée auprès de `ghcr.io`, ou le paquet peut être rendu public depuis ses paramètres GitHub.
+The most important defaults are:
 
-Exemple d’authentification, avec un jeton disposant du droit de lecture des paquets :
+```dotenv
+VAVOO_BIND_ADDRESS=127.0.0.1
+VAVOO_PORT=8899
+VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600
+VAVOO_STREAM_URL_TTL_SECONDS=3000
+VAVOO_PLAYLIST_CACHE_TTL_SECONDS=300
+VAVOO_HLS_ASSET_CACHE_TTL_SECONDS=45
+VAVOO_HLS_ASSET_MAX_CACHE_BYTES=12582912
+VAVOO_HLS_PREFETCH_SEGMENT_COUNT=2
+```
+
+See the complete [configuration reference](docs/CONFIGURATION.md) before changing cache, memory or network settings.
+
+## Security
+
+> [!WARNING]
+> Do not expose port `8899` directly to the public Internet. Keep the default loopback binding or use a trusted private network such as WireGuard. An authenticated reverse proxy and strict firewall rules are required when local-only access is impossible.
+
+The container is hardened by default with:
+
+- a non-root runtime user;
+- a read-only root filesystem;
+- all Linux capabilities dropped;
+- `no-new-privileges` enabled;
+- a small temporary filesystem mounted only at `/tmp`;
+- loopback-only host port publishing.
+
+Read the full [security policy](SECURITY.md).
+
+## Automated synchronization and validation
+
+GitHub Actions checks the upstream `main` branch every six hours. A build is requested when a new upstream commit is detected or when this wrapper changes. A scheduled rebuild is also forced periodically so base-image security updates are not ignored merely because the upstream SHA stayed unchanged.
+
+Before publication, the workflow:
+
+1. resolves and records the exact upstream commit;
+2. builds the patched image;
+3. verifies required patch markers and default values;
+4. runs `node --check` during the Docker build;
+5. starts the image temporarily;
+6. validates `/countries`, the French playlist and the renewable HLS master entry point;
+7. publishes `upstream-<SHA>` and `latest` only after all checks pass.
+
+Pull requests run the same build and smoke tests without publishing an image.
+
+## Building from source
+
+Pass an exact upstream commit rather than a moving branch:
+
+```bash
+docker build \
+  --build-arg UPSTREAM_REPO=Haehnchen/vavoo-iptv-stream-proxy \
+  --build-arg UPSTREAM_REF=<full-upstream-commit-sha> \
+  -t vavoo-iptv-stream-proxy:local .
+```
+
+The build requires the upstream `package-lock.json` and uses `npm ci`; it fails rather than falling back to an unlocked dependency installation.
+
+## Updating
+
+```bash
+docker compose pull
+docker compose up -d --remove-orphans
+docker compose ps
+```
+
+If the GHCR package is private, authenticate with a token that has package read permission:
 
 ```bash
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u Therand90 --password-stdin
 ```
 
-Ne placez jamais le jeton dans ce dépôt ni directement dans `compose.yaml`.
+Never commit the token or place it directly in `compose.yaml`.
 
-## Mise à jour
+## Documentation
 
-```bash
-docker compose pull
-docker compose up -d --remove-orphans
-```
+- [Configuration](docs/CONFIGURATION.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-`pull_policy: always` garantit également que `docker compose up -d` vérifie le tag `latest`.
+All public documentation is maintained in English and French. Non-obvious source and configuration comments follow the same bilingual convention.
 
-## Licence
+## License and content disclaimer
 
-Le code amont est distribué sous licence MIT et sa licence est incluse dans l’image. Les fichiers propres à ce dépôt servent à la construction, aux tests, au correctif local et au déploiement du conteneur.
+The files created specifically for this repository are distributed under the [MIT License](LICENSE). The upstream project remains © 2022 Daniel Espendiller under its own MIT license; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
+These software licenses do not grant rights to television channels, streams, trademarks or audiovisual works. Users are responsible for complying with applicable laws, service terms and content rights.

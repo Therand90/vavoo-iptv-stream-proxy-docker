@@ -1,0 +1,18 @@
+# EN: Local environment files and secrets.
+# FR : Fichiers d'environnement locaux et secrets.
+.env
+.env.*
+!.env.example
+
+# EN: Runtime and dependency artifacts.
+# FR : Artefacts d'exécution et de dépendances.
+node_modules/
+*.log
+npm-debug.log*
+
+# EN: Editor and operating-system files.
+# FR : Fichiers des éditeurs et du système d'exploitation.
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

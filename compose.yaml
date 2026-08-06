@@ -6,10 +6,16 @@ services:
     container_name: vavoo-iptv-stream-proxy
     restart: unless-stopped
     pull_policy: always
+    init: true
 
     environment:
       VAVOO_CHANNELS_CACHE_TTL_SECONDS: ${VAVOO_CHANNELS_CACHE_TTL_SECONDS:-21600}
       VAVOO_STREAM_URL_TTL_SECONDS: ${VAVOO_STREAM_URL_TTL_SECONDS:-3000}
+      VAVOO_PLAYLIST_CACHE_TTL_SECONDS: ${VAVOO_PLAYLIST_CACHE_TTL_SECONDS:-300}
+      VAVOO_HLS_ASSET_CACHE_TTL_SECONDS: ${VAVOO_HLS_ASSET_CACHE_TTL_SECONDS:-45}
+      VAVOO_HLS_ASSET_MAX_CACHE_BYTES: ${VAVOO_HLS_ASSET_MAX_CACHE_BYTES:-12582912}
+      VAVOO_HLS_PREFETCH_SEGMENT_COUNT: ${VAVOO_HLS_PREFETCH_SEGMENT_COUNT:-2}
+      VAVOO_HLS_PROXY_SECRET: ${VAVOO_HLS_PROXY_SECRET:-}
 
     command:
       - --http-host
@@ -23,6 +29,8 @@ services:
       - --vavoo-url-list
       - ${VAVOO_URL_LIST:-both}
 
+    # EN: Keep the loopback default unless a trusted private network requires access.
+    # FR : Gardez la boucle locale par défaut sauf si un réseau privé de confiance doit y accéder.
     ports:
       - "${VAVOO_BIND_ADDRESS:-127.0.0.1}:${VAVOO_PORT:-8899}:8888"
 
@@ -36,4 +44,11 @@ services:
     security_opt:
       - no-new-privileges:true
 
+    pids_limit: 128
     stop_grace_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
