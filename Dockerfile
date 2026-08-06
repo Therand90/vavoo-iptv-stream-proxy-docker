@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_IMAGE=node:24-bookworm-slim
+# EN: Pin the multi-platform Node.js base image by digest; Dependabot keeps it current.
+# FR : Épingle l’image Node.js multiplateforme par digest ; Dependabot la maintient à jour.
+ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 
 FROM ${NODE_IMAGE} AS build
 
