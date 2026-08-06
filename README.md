@@ -2,6 +2,9 @@
 
 # VAVOO IPTV Stream Proxy — Docker
 
+[![Build upstream Docker image](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/build-image.yml/badge.svg)](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/build-image.yml)
+[![Repository policy checks](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/repository-policy.yml/badge.svg)](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/repository-policy.yml)
+
 A validated Docker wrapper for the upstream [`Haehnchen/vavoo-iptv-stream-proxy`](https://github.com/Haehnchen/vavoo-iptv-stream-proxy) project.
 
 The image downloads a precise upstream commit, applies auditable fail-closed playback patches, installs the locked Node.js dependencies, runs syntax and live smoke tests, and publishes the image to GitHub Container Registry only after validation.
@@ -94,6 +97,19 @@ The container is hardened by default with:
 
 Read the full [security policy](SECURITY.md).
 
+## Supply-chain security
+
+The repository also protects the build and release path:
+
+- third-party GitHub Actions are pinned to verified full commit SHAs;
+- the official Node.js base image is pinned by digest and monitored by Dependabot;
+- the upstream application is downloaded from an exact commit and installed with its lockfile through `npm ci`;
+- a lightweight policy workflow checks the bilingual documentation, secret hygiene, immutable build inputs and Compose configuration on every pull request;
+- publication permissions are isolated in a dedicated job;
+- published images include BuildKit provenance and an attached software bill of materials (SBOM).
+
+For strict deployments, pin the container image by digest rather than relying only on a mutable tag.
+
 ## Automated synchronization and validation
 
 GitHub Actions checks the upstream `main` branch every six hours. A build is requested when a new upstream commit is detected or when this wrapper changes. A scheduled rebuild is also forced periodically so base-image security updates are not ignored merely because the upstream SHA stayed unchanged.
@@ -106,7 +122,8 @@ Before publication, the workflow:
 4. runs `node --check` during the Docker build;
 5. starts the image temporarily;
 6. validates `/countries`, the French playlist and the renewable HLS master entry point;
-7. publishes `upstream-<SHA>` and `latest` only after all checks pass.
+7. publishes `upstream-<SHA>` and `latest` only after all checks pass;
+8. attaches maximum BuildKit provenance and an SBOM to the published image.
 
 Pull requests run the same build and smoke tests without publishing an image.
 
