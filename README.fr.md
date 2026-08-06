@@ -2,6 +2,9 @@
 
 # VAVOO IPTV Stream Proxy — Docker
 
+[![Construction de l’image Docker](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/build-image.yml/badge.svg)](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/build-image.yml)
+[![Contrôles de politique du dépôt](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/repository-policy.yml/badge.svg)](https://github.com/Therand90/vavoo-iptv-stream-proxy-docker/actions/workflows/repository-policy.yml)
+
 Une image Docker validée pour le projet amont [`Haehnchen/vavoo-iptv-stream-proxy`](https://github.com/Haehnchen/vavoo-iptv-stream-proxy).
 
 L’image télécharge un commit amont précis, applique des correctifs de lecture auditables qui échouent de manière sûre, installe les dépendances Node.js verrouillées, exécute des contrôles syntaxiques et des smoke tests réels, puis publie l’image sur GitHub Container Registry uniquement après validation.
@@ -94,6 +97,19 @@ Le conteneur est renforcé par défaut grâce à :
 
 Consultez la [politique de sécurité](SECURITY.fr.md) complète.
 
+## Sécurité de la chaîne d’approvisionnement
+
+Le dépôt protège également le chemin de construction et de publication :
+
+- les GitHub Actions tierces sont épinglées sur des SHA de commit complets vérifiés ;
+- l’image Node.js officielle est épinglée par digest et surveillée par Dependabot ;
+- l’application amont est téléchargée depuis un commit exact et installée avec son lockfile via `npm ci` ;
+- un workflow léger vérifie à chaque pull request la documentation bilingue, l’hygiène des secrets, les entrées de construction immuables et la configuration Compose ;
+- les permissions de publication sont isolées dans un job dédié ;
+- les images publiées incluent une provenance BuildKit et une nomenclature logicielle jointe (SBOM).
+
+Pour les déploiements stricts, épinglez l’image du conteneur par digest plutôt que de dépendre uniquement d’un tag modifiable.
+
 ## Synchronisation et validation automatiques
 
 GitHub Actions vérifie la branche `main` du projet amont toutes les six heures. Une construction est demandée lorsqu’un nouveau commit amont est détecté ou lorsque cette image est modifiée. Une reconstruction planifiée est également forcée périodiquement afin de ne pas ignorer les correctifs de sécurité de l’image de base lorsque le SHA amont ne change pas.
@@ -106,7 +122,8 @@ Avant toute publication, le workflow :
 4. exécute `node --check` pendant la construction Docker ;
 5. démarre temporairement l’image ;
 6. valide `/countries`, la playlist française et le point d’entrée maître HLS renouvelable ;
-7. publie `upstream-<SHA>` et `latest` uniquement lorsque tous les contrôles réussissent.
+7. publie `upstream-<SHA>` et `latest` uniquement lorsque tous les contrôles réussissent ;
+8. joint une provenance BuildKit maximale et un SBOM à l’image publiée.
 
 Les pull requests exécutent les mêmes constructions et smoke tests sans publier d’image.
 
