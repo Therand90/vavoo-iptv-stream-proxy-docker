@@ -53,7 +53,8 @@ replaceExactlyOnce(
             }
             assetUrls.push(parsed.toString());
         } catch (error) {
-            // Ignore malformed playlist entries and keep serving the playlist.
+            // EN: Ignore malformed playlist entries and keep serving the playlist.
+            // FR : Ignore les entrées mal formées et continue de servir la playlist.
         }
     }
 
