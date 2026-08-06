@@ -41,6 +41,8 @@ Chaque correctif vérifie que le code amont attendu apparaît exactement une foi
 
 ## Démarrage rapide
 
+### Linux classique avec Docker Compose
+
 ```bash
 cp .env.example .env
 docker compose pull
@@ -48,7 +50,16 @@ docker compose up -d
 docker compose ps
 ```
 
-Par défaut, le Compose écoute uniquement sur l’interface de boucle locale :
+### LibreELEC sans Docker Compose
+
+Certaines installations de l’extension Docker LibreELEC fournissent le moteur Docker sans la commande `docker compose`. Utilisez alors le gestionnaire natif `/bin/sh` du dépôt :
+
+- [Guide d’installation LibreELEC](docs/LIBREELEC.fr.md)
+- [LibreELEC installation guide](docs/LIBREELEC.md)
+
+L’image actuellement publiée cible `linux/amd64`. Cette méthode est donc destinée aux systèmes LibreELEC x86_64, notamment les mini-PC Intel et AMD.
+
+La configuration par défaut écoute uniquement sur l’interface de boucle locale :
 
 ```text
 http://127.0.0.1:8899
@@ -104,7 +115,7 @@ Le dépôt protège également le chemin de construction et de publication :
 - les GitHub Actions tierces sont épinglées sur des SHA de commit complets vérifiés ;
 - l’image Node.js officielle est épinglée par digest et surveillée par Dependabot ;
 - l’application amont est téléchargée depuis un commit exact et installée avec son lockfile via `npm ci` ;
-- un workflow léger vérifie à chaque pull request la documentation bilingue, l’hygiène des secrets, les entrées de construction immuables et la configuration Compose ;
+- un workflow léger vérifie à chaque pull request la documentation bilingue, l’hygiène des secrets, les entrées de construction immuables, la syntaxe du gestionnaire et la configuration Compose ;
 - les permissions de publication sont isolées dans un job dédié ;
 - les images publiées incluent une provenance BuildKit et une nomenclature logicielle jointe (SBOM).
 
@@ -142,11 +153,22 @@ La construction exige le fichier `package-lock.json` amont et utilise `npm ci`. 
 
 ## Mise à jour
 
+Avec Docker Compose :
+
 ```bash
 docker compose pull
 docker compose up -d --remove-orphans
 docker compose ps
 ```
+
+Sur LibreELEC sans Compose :
+
+```sh
+cd /storage/docker/vavoo-iptv-stream-proxy
+./libreelec-vavoo.sh update
+```
+
+Le gestionnaire LibreELEC conserve un secours temporaire pendant la validation et supprime uniquement les anciennes images inutilisées produites par ce dépôt après une mise à jour réussie.
 
 Si le paquet GHCR est privé, authentifiez-vous avec un jeton autorisé à lire les paquets :
 
@@ -159,6 +181,7 @@ Ne versionnez jamais ce jeton et ne le placez pas directement dans `compose.yaml
 ## Documentation
 
 - [Configuration](docs/CONFIGURATION.fr.md)
+- [Installation LibreELEC](docs/LIBREELEC.fr.md)
 - [Politique de sécurité](SECURITY.fr.md)
 - [Contribution](CONTRIBUTING.fr.md)
 - [Notices relatives aux logiciels tiers](THIRD_PARTY_NOTICES.fr.md)
