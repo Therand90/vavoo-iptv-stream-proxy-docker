@@ -5,7 +5,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim
 FROM ${NODE_IMAGE} AS build
 
 ARG UPSTREAM_REPO=Haehnchen/vavoo-iptv-stream-proxy
-ARG UPSTREAM_REF=main
+ARG UPSTREAM_REF
 
 WORKDIR /src
 
@@ -14,22 +14,30 @@ COPY patches/renew-hourly-hls.mjs /tmp/renew-hourly-hls.mjs
 COPY patches/harden-hls-retries.mjs /tmp/harden-hls-retries.mjs
 COPY patches/harden-hls-assets.mjs /tmp/harden-hls-assets.mjs
 COPY patches/prefetch-hls-assets.mjs /tmp/prefetch-hls-assets.mjs
+COPY patches/configure-hls-tuning.mjs /tmp/configure-hls-tuning.mjs
+COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 
-RUN apt-get update \
+RUN test -n "${UPSTREAM_REF}" \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gzip tar \
     && rm -rf /var/lib/apt/lists/* \
     && curl --fail --silent --show-error --location \
        "https://github.com/${UPSTREAM_REPO}/archive/${UPSTREAM_REF}.tar.gz" \
        | tar --extract --gzip --strip-components=1 --directory /src \
     && test -f package.json \
+    && test -f package-lock.json \
     && node /tmp/extend-catalog-cache.mjs /src/index.js \
     && node /tmp/renew-hourly-hls.mjs /src/index.js \
     && node /tmp/harden-hls-retries.mjs /src/index.js \
     && node /tmp/harden-hls-assets.mjs /src/index.js \
     && node /tmp/prefetch-hls-assets.mjs /src/index.js \
+    && node /tmp/configure-hls-tuning.mjs /src/index.js \
+    && node /tmp/sign-hls-proxy-urls.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
-    && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
+    && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
+    && grep -q "invalid hls proxy signature" /src/index.js \
+    && npm ci --omit=dev \
     && node --check index.js \
     && npm cache clean --force
 
@@ -39,14 +47,21 @@ ARG UPSTREAM_REPO=Haehnchen/vavoo-iptv-stream-proxy
 ARG UPSTREAM_REF=unknown
 
 LABEL org.opencontainers.image.title="VAVOO IPTV Stream Proxy" \
-      org.opencontainers.image.description="Docker image built from Haehnchen/vavoo-iptv-stream-proxy" \
+      org.opencontainers.image.description="Validated Docker wrapper with renewable and resilient HLS playback patches" \
       org.opencontainers.image.source="https://github.com/Therand90/vavoo-iptv-stream-proxy-docker" \
+      org.opencontainers.image.documentation="https://github.com/Therand90/vavoo-iptv-stream-proxy-docker#readme" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="Therand90" \
       io.therand.upstream.repository="https://github.com/${UPSTREAM_REPO}" \
       io.therand.upstream.revision="${UPSTREAM_REF}"
 
 ENV NODE_ENV=production \
     VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600 \
-    VAVOO_STREAM_URL_TTL_SECONDS=3000
+    VAVOO_STREAM_URL_TTL_SECONDS=3000 \
+    VAVOO_PLAYLIST_CACHE_TTL_SECONDS=300 \
+    VAVOO_HLS_ASSET_CACHE_TTL_SECONDS=45 \
+    VAVOO_HLS_ASSET_MAX_CACHE_BYTES=12582912 \
+    VAVOO_HLS_PREFETCH_SEGMENT_COUNT=2
 
 WORKDIR /app
 
