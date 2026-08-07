@@ -40,6 +40,20 @@ sed -i "s|^VAVOO_HLS_PROXY_SECRET=.*|VAVOO_HLS_PROXY_SECRET=$secret|" .env
 
 The helper does not execute `.env` as shell code. It passes the complete file to Docker through `--env-file` and parses only the few values needed for port publishing and command-line arguments.
 
+### Optional trusted WireGuard access
+
+Keep the normal loopback binding for Kodi and set an optional second bind when another trusted WireGuard peer must query or test the proxy directly:
+
+```dotenv
+VAVOO_BIND_ADDRESS=127.0.0.1
+VAVOO_WIREGUARD_BIND_ADDRESS=10.13.13.2
+VAVOO_PORT=8899
+```
+
+The LibreELEC helper then publishes both `127.0.0.1:8899` and `10.13.13.2:8899` to container port `8888`. This preserves local Kodi access while exposing the service only on the selected WireGuard interface for trusted remote checks.
+
+Leave `VAVOO_WIREGUARD_BIND_ADDRESS` empty when it is not needed. The helper rejects `0.0.0.0` for this secondary binding; never use a public address there.
+
 ## 3. Install the container
 
 ```sh
@@ -55,6 +69,8 @@ http://127.0.0.1:8899/countries
 http://127.0.0.1:8899/channels.m3u8
 http://127.0.0.1:8899/channels.m3u8?country=France
 ```
+
+With the optional WireGuard binding configured, the same paths are also reachable on that exact private address.
 
 ## Daily commands
 
@@ -115,6 +131,7 @@ Delete the configuration directory manually only when it is no longer needed.
 The helper applies the same main runtime protections as `compose.yaml`:
 
 - loopback-only publishing by default;
+- optional publishing on one explicit trusted WireGuard address;
 - read-only root filesystem;
 - all Linux capabilities dropped;
 - `no-new-privileges`;
