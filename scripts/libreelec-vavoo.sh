@@ -74,6 +74,7 @@ load_config() {
   [ -f "$ENV_FILE" ] || fail "$ENV_FILE not found / introuvable. Copy .env.example to .env first / Copiez d'abord .env.example vers .env."
 
   BIND_ADDRESS="$(env_value VAVOO_BIND_ADDRESS 127.0.0.1)"
+  WIREGUARD_BIND_ADDRESS="$(env_value VAVOO_WIREGUARD_BIND_ADDRESS '')"
   PORT="$(env_value VAVOO_PORT 8899)"
   LANGUAGE="$(env_value VAVOO_LANGUAGE en)"
   REGION="$(env_value VAVOO_REGION US)"
@@ -83,10 +84,18 @@ load_config() {
     ''|*[!0-9]*) fail "VAVOO_PORT must be numeric / doit être numérique" ;;
   esac
 
-  case "$BIND_ADDRESS$LANGUAGE$REGION$URL_LIST" in
+  case "$BIND_ADDRESS$WIREGUARD_BIND_ADDRESS$LANGUAGE$REGION$URL_LIST" in
     *'
-'*|*' '*|*'	'*) fail "network and command values must not contain whitespace / les valeurs réseau et de commande ne doivent pas contenir d'espaces" ;;
+'*|*' '*|*'\t'*) fail "network and command values must not contain whitespace / les valeurs réseau et de commande ne doivent pas contenir d'espaces" ;;
   esac
+
+  if [ -n "$WIREGUARD_BIND_ADDRESS" ]; then
+    case "$WIREGUARD_BIND_ADDRESS" in
+      0.0.0.0|::)
+        fail "VAVOO_WIREGUARD_BIND_ADDRESS must target a specific trusted interface / doit viser une interface privée précise"
+        ;;
+    esac
+  fi
 
   case "$BIND_ADDRESS" in
     0.0.0.0|127.0.0.1) HEALTH_HOST="127.0.0.1" ;;
@@ -97,12 +106,17 @@ load_config() {
 run_container() {
   selected_image="$1"
 
+  set -- --publish "${BIND_ADDRESS}:${PORT}:8888"
+  if [ -n "$WIREGUARD_BIND_ADDRESS" ] && [ "$WIREGUARD_BIND_ADDRESS" != "$BIND_ADDRESS" ]; then
+    set -- "$@" --publish "${WIREGUARD_BIND_ADDRESS}:${PORT}:8888"
+  fi
+
   docker run -d \
     --name "$NAME" \
     --restart unless-stopped \
     --init \
     --env-file "$ENV_FILE" \
-    --publish "${BIND_ADDRESS}:${PORT}:8888" \
+    "$@" \
     --read-only \
     --tmpfs "/tmp:rw,size=16m,mode=1777" \
     --cap-drop ALL \
@@ -144,6 +158,9 @@ show_status() {
 
   if wait_until_ready; then
     say "Endpoint ready / Service disponible: http://${HEALTH_HOST}:${PORT}/countries"
+    if [ -n "$WIREGUARD_BIND_ADDRESS" ] && [ "$WIREGUARD_BIND_ADDRESS" != "$BIND_ADDRESS" ]; then
+      say "WireGuard endpoint / Service WireGuard: http://${WIREGUARD_BIND_ADDRESS}:${PORT}/countries"
+    fi
   else
     say "Endpoint unavailable / Service indisponible: http://${HEALTH_HOST}:${PORT}/countries"
     return 1
