@@ -14,11 +14,22 @@ docker compose up -d
 | Variable | Valeur par défaut | Rôle |
 |---|---:|---|
 | `VAVOO_BIND_ADDRESS` | `127.0.0.1` | Adresse de l’hôte utilisée pour publier le port Docker. Conservez la valeur par défaut sauf si un réseau privé de confiance doit y accéder directement. |
+| `VAVOO_WIREGUARD_BIND_ADDRESS` | vide | Seconde adresse d’hôte facultative utilisée par le gestionnaire LibreELEC natif. Elle conserve la boucle locale pour Kodi tout en publiant le même port sur une adresse WireGuard privée précise. `0.0.0.0` est refusé. |
 | `VAVOO_PORT` | `8899` | Port de l’hôte redirigé vers le port `8888` du conteneur. |
 | `VAVOO_LANGUAGE` | `en` | Langue envoyée aux API amont. |
 | `VAVOO_REGION` | `US` | Région envoyée aux API amont. `US` conserve généralement un catalogue large. |
 | `VAVOO_URL_LIST` | `both` | Sélection des sources amont : `primary`, `fallback` ou `both`. |
 | `VAVOO_CHANNELS_CACHE_TTL_SECONDS` | `21600` | Durée du cache du catalogue. Les valeurs inférieures à 300 secondes reviennent à la valeur par défaut. |
+
+`VAVOO_WIREGUARD_BIND_ADDRESS` est actuellement utilisé par `scripts/libreelec-vavoo.sh` ; le fichier Compose fourni continue d’utiliser uniquement `VAVOO_BIND_ADDRESS`. Sur LibreELEC, une configuration privée typique est :
+
+```dotenv
+VAVOO_BIND_ADDRESS=127.0.0.1
+VAVOO_WIREGUARD_BIND_ADDRESS=10.13.13.2
+VAVOO_PORT=8899
+```
+
+Cela crée deux liaisons d’hôte vers le même port du conteneur : la boucle locale pour Kodi et l’adresse WireGuard choisie pour les vérifications distantes de confiance. N’utilisez jamais une adresse publique ni `0.0.0.0` comme seconde liaison.
 
 ## Résilience de la lecture
 
