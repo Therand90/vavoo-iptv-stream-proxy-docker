@@ -40,6 +40,20 @@ sed -i "s|^VAVOO_HLS_PROXY_SECRET=.*|VAVOO_HLS_PROXY_SECRET=$secret|" .env
 
 Le gestionnaire n’exécute pas `.env` comme du code shell. Il transmet le fichier complet à Docker avec `--env-file` et ne lit que les quelques valeurs nécessaires à la publication du port et aux arguments de commande.
 
+### Accès WireGuard privé facultatif
+
+Conservez la liaison locale normale pour Kodi et définissez une seconde liaison facultative lorsqu’un autre pair WireGuard de confiance doit interroger ou tester directement le proxy :
+
+```dotenv
+VAVOO_BIND_ADDRESS=127.0.0.1
+VAVOO_WIREGUARD_BIND_ADDRESS=10.13.13.2
+VAVOO_PORT=8899
+```
+
+Le gestionnaire LibreELEC publie alors à la fois `127.0.0.1:8899` et `10.13.13.2:8899` vers le port `8888` du conteneur. Kodi conserve donc son accès local tandis que le service n’est exposé à distance que sur l’interface WireGuard choisie.
+
+Laissez `VAVOO_WIREGUARD_BIND_ADDRESS` vide lorsqu’elle n’est pas nécessaire. Le gestionnaire refuse `0.0.0.0` pour cette seconde liaison ; n’utilisez jamais une adresse publique à cet endroit.
+
 ## 3. Installer le conteneur
 
 ```sh
@@ -55,6 +69,8 @@ http://127.0.0.1:8899/countries
 http://127.0.0.1:8899/channels.m3u8
 http://127.0.0.1:8899/channels.m3u8?country=France
 ```
+
+Lorsque la seconde liaison WireGuard est configurée, ces mêmes chemins sont également accessibles sur cette adresse privée précise.
 
 ## Commandes courantes
 
@@ -115,6 +131,7 @@ Supprimez manuellement le dossier de configuration seulement lorsqu’il n’est
 Le gestionnaire applique les principales protections d’exécution du fichier `compose.yaml` :
 
 - publication limitée à la boucle locale par défaut ;
+- publication facultative sur une adresse WireGuard privée explicite ;
 - système de fichiers racine en lecture seule ;
 - suppression de toutes les capabilities Linux ;
 - `no-new-privileges` ;
