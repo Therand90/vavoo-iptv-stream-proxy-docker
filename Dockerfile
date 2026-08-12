@@ -21,6 +21,7 @@ COPY patches/hedge-hls-prefetch.mjs /tmp/hedge-hls-prefetch.mjs
 COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 COPY patches/group-logical-channels.mjs /tmp/group-logical-channels.mjs
 COPY patches/detect-looping-variants.mjs /tmp/detect-looping-variants.mjs
+COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -41,6 +42,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/sign-hls-proxy-urls.mjs /src/index.js \
     && node /tmp/group-logical-channels.mjs /src/index.js \
     && node /tmp/detect-looping-variants.mjs /src/index.js \
+    && node /tmp/fix-logical-timeline.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
@@ -51,6 +53,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "logical variant selected" /src/index.js \
     && grep -q "logical loop confirmed" /src/index.js \
     && grep -q "logical timeline discontinuity" /src/index.js \
+    && grep -q "lastSourceFirst" /src/index.js \
     && npm ci --omit=dev \
     && node --check index.js \
     && npm cache clean --force
