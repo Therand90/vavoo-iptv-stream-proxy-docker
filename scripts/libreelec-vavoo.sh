@@ -74,6 +74,7 @@ load_config() {
   [ -f "$ENV_FILE" ] || fail "$ENV_FILE not found / introuvable. Copy .env.example to .env first / Copiez d'abord .env.example vers .env."
 
   BIND_ADDRESS="$(env_value VAVOO_BIND_ADDRESS 127.0.0.1)"
+  PRIVATE_BIND_ADDRESS="$(env_value VAVOO_PRIVATE_BIND_ADDRESS '')"
   PORT="$(env_value VAVOO_PORT 8899)"
   LANGUAGE="$(env_value VAVOO_LANGUAGE en)"
   REGION="$(env_value VAVOO_REGION US)"
@@ -83,10 +84,22 @@ load_config() {
     ''|*[!0-9]*) fail "VAVOO_PORT must be numeric / doit être numérique" ;;
   esac
 
-  case "$BIND_ADDRESS$LANGUAGE$REGION$URL_LIST" in
+  case "$BIND_ADDRESS$PRIVATE_BIND_ADDRESS$LANGUAGE$REGION$URL_LIST" in
     *'
-'*|*' '*|*'	'*) fail "network and command values must not contain whitespace / les valeurs réseau et de commande ne doivent pas contenir d'espaces" ;;
+'*|*' '*|*'\t'*) fail "network and command values must not contain whitespace / les valeurs réseau et de commande ne doivent pas contenir d'espaces" ;;
   esac
+
+  if [ -n "$PRIVATE_BIND_ADDRESS" ] && [ "$PRIVATE_BIND_ADDRESS" = "$BIND_ADDRESS" ]; then
+    PRIVATE_BIND_ADDRESS=""
+  fi
+
+  if [ "$BIND_ADDRESS" = "0.0.0.0" ] && [ -n "$PRIVATE_BIND_ADDRESS" ]; then
+    fail "VAVOO_PRIVATE_BIND_ADDRESS conflicts with VAVOO_BIND_ADDRESS=0.0.0.0 / entre en conflit avec VAVOO_BIND_ADDRESS=0.0.0.0"
+  fi
+
+  if [ "$PRIVATE_BIND_ADDRESS" = "0.0.0.0" ]; then
+    fail "VAVOO_PRIVATE_BIND_ADDRESS must be a specific trusted address / doit être une adresse privée spécifique de confiance"
+  fi
 
   case "$BIND_ADDRESS" in
     0.0.0.0|127.0.0.1) HEALTH_HOST="127.0.0.1" ;;
@@ -97,12 +110,17 @@ load_config() {
 run_container() {
   selected_image="$1"
 
+  set -- --publish "${BIND_ADDRESS}:${PORT}:8888"
+  if [ -n "$PRIVATE_BIND_ADDRESS" ]; then
+    set -- "$@" --publish "${PRIVATE_BIND_ADDRESS}:${PORT}:8888"
+  fi
+
   docker run -d \
     --name "$NAME" \
     --restart unless-stopped \
     --init \
     --env-file "$ENV_FILE" \
-    --publish "${BIND_ADDRESS}:${PORT}:8888" \
+    "$@" \
     --read-only \
     --tmpfs "/tmp:rw,size=16m,mode=1777" \
     --cap-drop ALL \
@@ -120,10 +138,20 @@ run_container() {
     --vavoo-url-list "$URL_LIST"
 }
 
+endpoints_ready() {
+  curl -fsS "http://${HEALTH_HOST}:${PORT}/countries" >/dev/null 2>&1 || return 1
+
+  if [ -n "$PRIVATE_BIND_ADDRESS" ]; then
+    curl -fsS "http://${PRIVATE_BIND_ADDRESS}:${PORT}/countries" >/dev/null 2>&1 || return 1
+  fi
+
+  return 0
+}
+
 wait_until_ready() {
   attempts=0
   while [ "$attempts" -lt 45 ]; do
-    if curl -fsS "http://${HEALTH_HOST}:${PORT}/countries" >/dev/null 2>&1; then
+    if endpoints_ready; then
       return 0
     fi
     attempts=$((attempts + 1))
@@ -140,12 +168,18 @@ show_status() {
 
   docker ps -a \
     --filter "name=^/${NAME}$" \
-    --format 'Container/Conteneur={{.Names}} | State/État={{.Status}} | Image={{.Image}}'
+    --format 'Container/Conteneur={{.Names}} | State/État={{.Status}} | Image={{.Image}} | Ports={{.Ports}}'
 
   if wait_until_ready; then
     say "Endpoint ready / Service disponible: http://${HEALTH_HOST}:${PORT}/countries"
+    if [ -n "$PRIVATE_BIND_ADDRESS" ]; then
+      say "Private endpoint ready / Service privé disponible: http://${PRIVATE_BIND_ADDRESS}:${PORT}/countries"
+    fi
   else
     say "Endpoint unavailable / Service indisponible: http://${HEALTH_HOST}:${PORT}/countries"
+    if [ -n "$PRIVATE_BIND_ADDRESS" ]; then
+      say "Private endpoint required / Service privé requis: http://${PRIVATE_BIND_ADDRESS}:${PORT}/countries"
+    fi
     return 1
   fi
 }
