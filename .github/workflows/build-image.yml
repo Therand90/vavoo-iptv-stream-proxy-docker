@@ -150,7 +150,12 @@ jobs:
               "renewable hls master",
               "Buffer.from(await upstream.arrayBuffer())",
               "removeListener(",
-              "onSocketClose"
+              "onSocketClose",
+              "/channels-grouped.m3u8",
+              "/hls-group/:id",
+              "logical loop confirmed",
+              "logical timeline discontinuity",
+              "lastSourceFirst"
             ];
             for (const marker of required) {
               if (!source.includes(marker)) {
@@ -169,6 +174,9 @@ jobs:
           asset_ttl="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_HLS_ASSET_CACHE_TTL_SECONDS"')"
           asset_max="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_HLS_ASSET_MAX_CACHE_BYTES"')"
           prefetch_count="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_HLS_PREFETCH_SEGMENT_COUNT"')"
+          loop_enabled="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_DETECTION_ENABLED"')"
+          loop_threshold="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_SIMILARITY_THRESHOLD"')"
+          loop_confirmations="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_CONFIRMATIONS"')"
 
           test "$catalog_ttl" = "21600"
           test "$stream_ttl" = "3000"
@@ -176,6 +184,9 @@ jobs:
           test "$asset_ttl" = "45"
           test "$asset_max" = "12582912"
           test "$prefetch_count" = "2"
+          test "$loop_enabled" = "true"
+          test "$loop_threshold" = "0.70"
+          test "$loop_confirmations" = "2"
 
       - name: Smoke-test catalog and renewable HLS entry point
         if: steps.decision.outputs.build == 'true'
@@ -231,6 +242,24 @@ jobs:
           grep --quiet '^#EXTINF' /tmp/vavoo-france.m3u8
           grep --quiet '/stream/' /tmp/vavoo-france.m3u8
 
+          curl --fail --silent --show-error \
+            "http://127.0.0.1:18888/channels-grouped.m3u8?country=France" \
+            --output /tmp/vavoo-france-grouped.m3u8
+
+          grep --quiet '^#EXTM3U' /tmp/vavoo-france-grouped.m3u8
+          grep --quiet '^#EXTINF' /tmp/vavoo-france-grouped.m3u8
+          grep --quiet '/stream-group/' /tmp/vavoo-france-grouped.m3u8
+
+          raw_count="$(grep -c '^#EXTINF:' /tmp/vavoo-france.m3u8)"
+          grouped_count="$(grep -c '^#EXTINF:' /tmp/vavoo-france-grouped.m3u8)"
+          test "$grouped_count" -gt 0
+          test "$grouped_count" -le "$raw_count"
+
+          curl --fail --silent --show-error \
+            "http://127.0.0.1:18888/channel-groups?country=France" \
+            --output /tmp/vavoo-france-groups.json
+          grep --quiet '"variant_count"' /tmp/vavoo-france-groups.json
+
           stream_url="$(awk '/\/stream\// { print; exit }' /tmp/vavoo-france.m3u8)"
           stream_url="${stream_url%%|*}"
           test -n "$stream_url"
@@ -242,6 +271,15 @@ jobs:
 
           grep --quiet '^#EXTM3U' /tmp/vavoo-master.m3u8
           grep --quiet '/hls-channel/' /tmp/vavoo-master.m3u8
+
+          logical_stream_url="$(awk '/\/stream-group\// { print; exit }' /tmp/vavoo-france-grouped.m3u8)"
+          test -n "$logical_stream_url"
+          curl --fail --silent --show-error \
+            --user-agent 'VAVOO/2.6' \
+            "$logical_stream_url" \
+            --output /tmp/vavoo-logical-master.m3u8
+          grep --quiet '^#EXTM3U' /tmp/vavoo-logical-master.m3u8
+          grep --quiet '/hls-group/' /tmp/vavoo-logical-master.m3u8
 
       - name: Write validation summary
         if: always()
