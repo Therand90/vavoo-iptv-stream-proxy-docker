@@ -22,7 +22,7 @@ COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 COPY patches/group-logical-channels.mjs /tmp/group-logical-channels.mjs
 COPY patches/detect-looping-variants.mjs /tmp/detect-looping-variants.mjs
 COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
-COPY patches/rank-logical-variants.mjs /tmp/rank-logical-variants.mjs
+COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
