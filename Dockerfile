@@ -22,6 +22,7 @@ COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 COPY patches/group-logical-channels.mjs /tmp/group-logical-channels.mjs
 COPY patches/detect-looping-variants.mjs /tmp/detect-looping-variants.mjs
 COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
+COPY patches/rank-logical-variants.mjs /tmp/rank-logical-variants.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -43,6 +44,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/group-logical-channels.mjs /src/index.js \
     && node /tmp/detect-looping-variants.mjs /src/index.js \
     && node /tmp/fix-logical-timeline.mjs /src/index.js \
+    && node /tmp/rank-logical-variants.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
@@ -54,6 +56,8 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "logical loop confirmed" /src/index.js \
     && grep -q "logical timeline discontinuity" /src/index.js \
     && grep -q "lastSourceFirst" /src/index.js \
+    && grep -q "logical quality ranking" /src/index.js \
+    && grep -q "logical quality probe" /src/index.js \
     && npm ci --omit=dev \
     && node --check index.js \
     && npm cache clean --force
@@ -86,7 +90,9 @@ ENV NODE_ENV=production \
     VAVOO_LOOP_MIN_COMMON_NALS=100 \
     VAVOO_LOOP_CONFIRMATIONS=2 \
     VAVOO_LOOP_HISTORY_SEGMENTS=8 \
-    VAVOO_LOOP_QUARANTINE_SECONDS=1800
+    VAVOO_LOOP_QUARANTINE_SECONDS=1800 \
+    VAVOO_QUALITY_RANKING_ENABLED=true \
+    VAVOO_QUALITY_CACHE_SECONDS=1800
 
 WORKDIR /app
 
