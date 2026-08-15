@@ -24,6 +24,7 @@ COPY patches/detect-looping-variants.mjs /tmp/detect-looping-variants.mjs
 COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
 COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
 COPY patches/filter-logical-audio-language.mjs /tmp/filter-logical-audio-language.mjs
+COPY patches/fix-logical-audio-hls-media.mjs /tmp/fix-logical-audio-hls-media.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -47,6 +48,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/fix-logical-timeline.mjs /src/index.js \
     && node /tmp/rank-logical-variants.mjs /src/index.js \
     && node /tmp/filter-logical-audio-language.mjs /src/index.js \
+    && node /tmp/fix-logical-audio-hls-media.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
@@ -62,6 +64,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "logical quality probe" /src/index.js \
     && grep -q "logical audio language blocked every variant" /src/index.js \
     && grep -q "audio_language_class" /src/index.js \
+    && grep -Fq "(?:^|[:,])TYPE=AUDIO" /src/index.js \
     && npm ci --omit=dev \
     && node --check index.js \
     && npm cache clean --force
