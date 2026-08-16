@@ -17,6 +17,7 @@ COPY patches/harden-hls-retries.mjs /tmp/harden-hls-retries.mjs
 COPY patches/harden-hls-assets.mjs /tmp/harden-hls-assets.mjs
 COPY patches/prefetch-hls-assets.mjs /tmp/prefetch-hls-assets.mjs
 COPY patches/configure-hls-tuning.mjs /tmp/configure-hls-tuning.mjs
+COPY patches/harden-hls-playlist-latency.mjs /tmp/harden-hls-playlist-latency.mjs
 COPY patches/hedge-hls-prefetch.mjs /tmp/hedge-hls-prefetch.mjs
 COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 COPY patches/group-logical-channels.mjs /tmp/group-logical-channels.mjs
@@ -25,6 +26,7 @@ COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
 COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
 COPY patches/filter-logical-audio-language.mjs /tmp/filter-logical-audio-language.mjs
 COPY patches/fix-logical-audio-hls-media.mjs /tmp/fix-logical-audio-hls-media.mjs
+COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-variant.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -41,6 +43,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/harden-hls-assets.mjs /src/index.js \
     && node /tmp/prefetch-hls-assets.mjs /src/index.js \
     && node /tmp/configure-hls-tuning.mjs /src/index.js \
+    && node /tmp/harden-hls-playlist-latency.mjs /src/index.js \
     && node /tmp/hedge-hls-prefetch.mjs /src/index.js \
     && node /tmp/sign-hls-proxy-urls.mjs /src/index.js \
     && node /tmp/group-logical-channels.mjs /src/index.js \
@@ -49,11 +52,16 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/rank-logical-variants.mjs /src/index.js \
     && node /tmp/filter-logical-audio-language.mjs /src/index.js \
     && node /tmp/fix-logical-audio-hls-media.mjs /src/index.js \
+    && node /tmp/stabilize-logical-active-variant.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS" /src/index.js \
     && grep -q "hls asset hedge won" /src/index.js \
+    && grep -q "VAVOO_PLAYLIST_HEDGE_DELAY_MS" /src/index.js \
+    && grep -q "VAVOO_PLAYLIST_FAST_FALLBACK_MS" /src/index.js \
+    && grep -q "playlist hedge won" /src/index.js \
+    && grep -q "serving last valid playlist quickly" /src/index.js \
     && grep -q "invalid hls proxy signature" /src/index.js \
     && grep -q "channels-grouped.m3u8" /src/index.js \
     && grep -q "logical variant selected" /src/index.js \
@@ -65,6 +73,9 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "logical audio language blocked every variant" /src/index.js \
     && grep -q "audio_language_class" /src/index.js \
     && grep -Fq "(?:^|[:,])TYPE=AUDIO" /src/index.js \
+    && grep -q "VAVOO_ACTIVE_STALE_GRACE_SECONDS" /src/index.js \
+    && grep -q "logical active stale grace" /src/index.js \
+    && grep -q "Quality-cache expiry alone must not unstick" /src/index.js \
     && npm ci --omit=dev \
     && node --check index.js \
     && npm cache clean --force
@@ -87,11 +98,14 @@ ENV NODE_ENV=production \
     VAVOO_CHANNELS_CACHE_TTL_SECONDS=21600 \
     VAVOO_STREAM_URL_TTL_SECONDS=3000 \
     VAVOO_PLAYLIST_CACHE_TTL_SECONDS=300 \
+    VAVOO_PLAYLIST_HEDGE_DELAY_MS=1000 \
+    VAVOO_PLAYLIST_FAST_FALLBACK_MS=3000 \
     VAVOO_HLS_ASSET_CACHE_TTL_SECONDS=45 \
     VAVOO_HLS_ASSET_MAX_CACHE_BYTES=12582912 \
     VAVOO_HLS_PREFETCH_SEGMENT_COUNT=2 \
     VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS=1500 \
     VAVOO_VARIANT_QUARANTINE_SECONDS=300 \
+    VAVOO_ACTIVE_STALE_GRACE_SECONDS=15 \
     VAVOO_LOOP_DETECTION_ENABLED=true \
     VAVOO_LOOP_SIMILARITY_THRESHOLD=0.70 \
     VAVOO_LOOP_MIN_COMMON_NALS=100 \
