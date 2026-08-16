@@ -26,19 +26,27 @@ docker compose up -d
 |---|---:|---|
 | `VAVOO_STREAM_URL_TTL_SECONDS` | `3000` | Local lifetime of a signed stream URL. Fifty minutes renews it before the typical hourly expiry. Values below 300 fall back to the default. |
 | `VAVOO_PLAYLIST_CACHE_TTL_SECONDS` | `300` | Lifetime of the last valid media playlist used during temporary upstream failures. |
+| `VAVOO_PLAYLIST_HEDGE_DELAY_MS` | `1000` | Delay before starting one backup playlist request when the primary request is still pending during established playback. |
+| `VAVOO_PLAYLIST_FAST_FALLBACK_MS` | `3000` | Total fresh-playlist budget when a last-valid playlist is already cached. Once exceeded, the proxy immediately serves the cached playlist and invalidates the signed URL for the next poll. Set to `0` to restore the legacy retry path for this case. |
 | `VAVOO_HLS_ASSET_CACHE_TTL_SECONDS` | `45` | Short memory-cache lifetime for successfully downloaded HLS media assets. |
 | `VAVOO_HLS_ASSET_MAX_CACHE_BYTES` | `12582912` | Maximum size of one cached media asset, in bytes. The default is 12 MiB. |
 | `VAVOO_HLS_PREFETCH_SEGMENT_COUNT` | `2` | Number of most recent media segments prefetched from each renewed playlist. Set to `0` to disable prefetching. |
-| `VAVOO_VARIANT_QUARANTINE_SECONDS` | `300` | Temporary quarantine applied to a variant after an ordinary fetch error or stale playlist. |
+| `VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS` | `1500` | Delay before starting a backup media request when the player is waiting on a still-running segment prefetch. |
+| `VAVOO_VARIANT_QUARANTINE_SECONDS` | `300` | Temporary quarantine applied to a variant after an ordinary fetch error or a persistently stale playlist. |
+| `VAVOO_ACTIVE_STALE_GRACE_SECONDS` | `15` | Grace period during which an already active logical variant remains selected when only its fresh playlist is briefly unavailable. Set to `0` to disable the grace period. |
 | `VAVOO_LOOP_DETECTION_ENABLED` | `true` | Enables the lightweight MPEG-TS/H.264 video-loop detector. |
 | `VAVOO_LOOP_SIMILARITY_THRESHOLD` | `0.70` | Minimum similarity used by video-repeat detection. |
 | `VAVOO_LOOP_MIN_COMMON_NALS` | `100` | Minimum number of common NAL units required before a repeat is meaningful. |
 | `VAVOO_LOOP_CONFIRMATIONS` | `2` | Consecutive detections required before quarantining a variant. |
 | `VAVOO_LOOP_HISTORY_SEGMENTS` | `8` | Number of historical segments kept when looking for repetition. |
 | `VAVOO_LOOP_QUARANTINE_SECONDS` | `1800` | Quarantine duration after a video loop is confirmed. |
-| `VAVOO_QUALITY_RANKING_ENABLED` | `true` | Ranks variants by resolution, frame rate, bitrate and loop signals when no healthy active variant exists. |
+| `VAVOO_QUALITY_RANKING_ENABLED` | `true` | Ranks variants by resolution, frame rate, bitrate and loop signals when no healthy active variant exists. Expiry of cached measurements alone does not trigger re-ranking of an already active variant. |
 | `VAVOO_QUALITY_CACHE_SECONDS` | `1800` | Lifetime of cached quality and audio-language measurements for a variant. |
 | `VAVOO_HLS_PROXY_SECRET` | generated at startup | Optional persistent secret used to sign internal `/hls-proxy` URLs. Leave empty for a single container. Set the same strong secret on every replica when several instances must accept one another's signed URLs. |
+
+During established playback, a playlist that returns normally before `VAVOO_PLAYLIST_HEDGE_DELAY_MS` creates no extra request. If it remains pending, exactly one backup request is started. When neither the primary nor its backup returns a fresh playlist before `VAVOO_PLAYLIST_FAST_FALLBACK_MS`, the proxy serves the last valid cached playlist instead of letting Kodi wait for the historical multi-second timeout path. The signed stream URL is invalidated so the next poll starts from a fresh resolution.
+
+For an already active logical channel, that temporarily stale fallback does not immediately switch variants: `VAVOO_ACTIVE_STALE_GRACE_SECONDS` keeps the active source selected for a short window. A persistent failure beyond the grace window still follows the normal quarantine and failover behavior. Loop detection remains independent: a genuinely confirmed loop still triggers the long loop quarantine.
 
 ## Logical-variant audio language
 
@@ -55,7 +63,7 @@ With the defaults:
 - a variant declaring French is preferred;
 - a variant declaring English without French is excluded from failover;
 - a variant with unknown language remains usable as a fallback so a badly tagged stream is not lost;
-- an already healthy active variant is not replaced merely because another variant has better technical quality.
+- an already healthy active variant is not replaced merely because another variant has better technical quality or because cached quality measurements have just expired.
 
 The `/channel-groups` endpoint exposes the detected languages and policy result in each variant's `quality` metadata (`audio_languages`, `audio_language_class`, `audio_language_allowed`).
 
