@@ -74,13 +74,11 @@ replaceExactlyOnce(
 );
 
 replaceExactlyOnce(
-  `function markLogicalVariantFailure(group, variant, reason) {
-    const state = getLogicalVariantState(group);
-    const until = Date.now() + LOGICAL_VARIANT_QUARANTINE_SECONDS * 1000;`,
-  `function markLogicalVariantFailure(group, variant, reason) {
-    const state = getLogicalVariantState(group);
+  `    const state = getLogicalVariantState(group);
+    const safeTtl = Number.isFinite(ttlSeconds) && ttlSeconds >= 30`,
+  `    const state = getLogicalVariantState(group);
     state.staleSinceByVariant.delete(variant.id);
-    const until = Date.now() + LOGICAL_VARIANT_QUARANTINE_SECONDS * 1000;`,
+    const safeTtl = Number.isFinite(ttlSeconds) && ttlSeconds >= 30`,
   'logical stale-state failure cleanup'
 );
 
