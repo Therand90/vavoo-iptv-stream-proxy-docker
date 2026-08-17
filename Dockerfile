@@ -27,6 +27,7 @@ COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
 COPY patches/filter-logical-audio-language.mjs /tmp/filter-logical-audio-language.mjs
 COPY patches/fix-logical-audio-hls-media.mjs /tmp/fix-logical-audio-hls-media.mjs
 COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-variant.mjs
+COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -53,6 +54,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/filter-logical-audio-language.mjs /src/index.js \
     && node /tmp/fix-logical-audio-hls-media.mjs /src/index.js \
     && node /tmp/stabilize-logical-active-variant.mjs /src/index.js \
+    && node /tmp/delay-hls-live-edge.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
@@ -76,6 +78,9 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "VAVOO_ACTIVE_STALE_GRACE_SECONDS" /src/index.js \
     && grep -q "logical active stale grace" /src/index.js \
     && grep -q "Quality-cache expiry alone must not unstick" /src/index.js \
+    && grep -q "VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS" /src/index.js \
+    && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
+    && grep -q "safety_delay=" /src/index.js \
     && npm ci --omit=dev \
     && node --check index.js \
     && npm cache clean --force
@@ -104,6 +109,7 @@ ENV NODE_ENV=production \
     VAVOO_HLS_ASSET_MAX_CACHE_BYTES=12582912 \
     VAVOO_HLS_PREFETCH_SEGMENT_COUNT=2 \
     VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS=1500 \
+    VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS=2 \
     VAVOO_VARIANT_QUARANTINE_SECONDS=300 \
     VAVOO_ACTIVE_STALE_GRACE_SECONDS=15 \
     VAVOO_LOOP_DETECTION_ENABLED=true \
