@@ -32,6 +32,7 @@ docker compose up -d
 | `VAVOO_HLS_ASSET_MAX_CACHE_BYTES` | `12582912` | Maximum size of one cached media asset, in bytes. The default is 12 MiB. |
 | `VAVOO_HLS_PREFETCH_SEGMENT_COUNT` | `2` | Number of most recent media segments prefetched from each renewed playlist. Set to `0` to disable prefetching. |
 | `VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS` | `1500` | Delay before starting a backup media request when the player is waiting on a still-running segment prefetch. |
+| `VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS` | `2` | Number of prefetched segments deliberately hidden from consumers so they remain behind the live edge. The effective delay is reduced automatically when the playlist is too short or the configured prefetch depth is smaller. |
 | `VAVOO_VARIANT_QUARANTINE_SECONDS` | `300` | Temporary quarantine applied to a variant after an ordinary fetch error or a persistently stale playlist. |
 | `VAVOO_ACTIVE_STALE_GRACE_SECONDS` | `15` | Grace period during which an already active logical variant remains selected when only its fresh playlist is briefly unavailable. Set to `0` to disable the grace period. |
 | `VAVOO_LOOP_DETECTION_ENABLED` | `true` | Enables the lightweight MPEG-TS/H.264 video-loop detector. |
@@ -46,7 +47,11 @@ docker compose up -d
 
 During established playback, a playlist that returns normally before `VAVOO_PLAYLIST_HEDGE_DELAY_MS` creates no extra request. If it remains pending, exactly one backup request is started. When neither the primary nor its backup returns a fresh playlist before `VAVOO_PLAYLIST_FAST_FALLBACK_MS`, the proxy serves the last valid cached playlist instead of letting Kodi wait for the historical multi-second timeout path. The signed stream URL is invalidated so the next poll starts from a fresh resolution.
 
-For an already active logical channel, that temporarily stale fallback does not immediately switch variants: `VAVOO_ACTIVE_STALE_GRACE_SECONDS` keeps the active source selected for a short window. A persistent failure beyond the grace window still follows the normal quarantine and failover behavior. Loop detection remains independent: a genuinely confirmed loop still triggers the long loop quarantine.
+The `VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS` safety buffer is applied after the upstream playlist is downloaded but before it is presented to Kodi or any other consumer of the proxy. With the default value `2`, the two newest segments remain hidden while they are being prefetched; a six-segment live playlist therefore normally exposes four. When one of those hidden segments becomes visible on a later poll, it has normally already been fully downloaded into the short asset cache. This turns multi-second upstream stalls into safety margin instead of a `stream stalled` event followed by accelerated catch-up. VOD playlists ending with `#EXT-X-ENDLIST` are never delayed, and the proxy always keeps at least three segments visible.
+
+The same delay protects recording consumers when they use the proxy HLS endpoints. Recordings therefore benefit from the same prefetch/cache margin as live playback. The tradeoff is a small content latency versus wall-clock time, so strict recording boundaries should account for the configured segment delay. Scheduling a margin before and after the target program naturally absorbs it.
+
+For an already active logical channel, a temporarily stale fallback does not immediately switch variants: `VAVOO_ACTIVE_STALE_GRACE_SECONDS` keeps the active source selected for a short window. A persistent failure beyond the grace window still follows the normal quarantine and failover behavior. Loop detection remains independent: a genuinely confirmed loop still triggers the long loop quarantine.
 
 ## Logical-variant audio language
 
