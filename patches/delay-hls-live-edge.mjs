@@ -9,16 +9,21 @@ if (!target) {
 
 let source = readFileSync(target, 'utf8');
 
-function replaceExactlyOnce(search, replacement, description) {
+function replaceExactly(search, replacement, expected, description) {
   const occurrences = source.split(search).length - 1;
 
-  if (occurrences !== 1) {
+  if (occurrences !== expected) {
     throw new Error(
-      description + ': expected exactly one match, found ' + occurrences
+      description + ': expected exactly ' + expected +
+      ' match(es), found ' + occurrences
     );
   }
 
-  source = source.replace(search, replacement);
+  source = source.split(search).join(replacement);
+}
+
+function replaceExactlyOnce(search, replacement, description) {
+  replaceExactly(search, replacement, 1, description);
 }
 
 replaceExactlyOnce(
@@ -142,7 +147,7 @@ replaceExactlyOnce(
   'logical HLS live-edge delay insertion'
 );
 
-replaceExactlyOnce(
+replaceExactly(
   `            ' sequence=' + debugInfo.sequence +
             ' entries=' + debugInfo.segments
         );
@@ -159,27 +164,8 @@ replaceExactlyOnce(
         );
         setPlaylistHeaders(res);
         res.send(rewrittenPlaylist);`,
-  'renewable HLS live-edge diagnostics'
-);
-
-replaceExactlyOnce(
-  `            ' sequence=' + debugInfo.sequence +
-            ' entries=' + debugInfo.segments
-        );
-        setPlaylistHeaders(res);
-        res.send(rewrittenPlaylist);`,
-  `            ' sequence=' + debugInfo.sequence +
-            ' entries=' + debugInfo.segments +
-            ' safety_delay=' + liveEdge.hiddenSegments +
-            ' visible=' + liveEdge.visibleSegments
-        );
-        res.setHeader(
-            'X-Therand-Vavoo-Live-Edge-Delay-Segments',
-            String(liveEdge.hiddenSegments)
-        );
-        setPlaylistHeaders(res);
-        res.send(rewrittenPlaylist);`,
-  'logical HLS live-edge diagnostics'
+  2,
+  'HLS live-edge diagnostics'
 );
 
 writeFileSync(target, source, 'utf8');
