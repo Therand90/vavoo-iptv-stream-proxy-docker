@@ -35,6 +35,7 @@ docker compose up -d
 | `VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS` | `2` | Nombre de segments préchargés volontairement masqués aux consommateurs afin de rester derrière le bord du direct. Le retard réel dépend de la durée des segments ; il est automatiquement réduit si la playlist contient trop peu de segments ou si la profondeur de préchargement est plus faible. |
 | `VAVOO_VARIANT_QUARANTINE_SECONDS` | `300` | Quarantaine temporaire appliquée à une variante après une erreur ordinaire ou une playlist périmée persistante. |
 | `VAVOO_ACTIVE_STALE_GRACE_SECONDS` | `8` | Délai de grâce pendant lequel une variante logique déjà active reste sélectionnée lorsque seule sa playlist fraîche est momentanément indisponible. Cette valeur plus courte tolère toujours un incident bref tout en permettant le failover avant que Kodi n’atteigne son seuil d’EOF. Utilisez `0` pour désactiver ce délai. |
+| `VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS` | `20` | Délai maximal pendant lequel une playlist média fraîche peut continuer à répondre HTTP 200 sans faire avancer son segment le plus récent. Au-delà, la variante est considérée figée et le failover est déclenché. Utilisez `0` pour désactiver ce watchdog. |
 | `VAVOO_LOOP_DETECTION_ENABLED` | `true` | Active la détection légère de boucle vidéo MPEG-TS/H.264. |
 | `VAVOO_LOOP_SIMILARITY_THRESHOLD` | `0.70` | Similarité minimale utilisée par la détection de répétition vidéo. |
 | `VAVOO_LOOP_MIN_COMMON_NALS` | `100` | Nombre minimal de NAL communs requis avant de considérer une répétition comme significative. |
@@ -54,7 +55,9 @@ Ce retard s’applique aussi aux consommateurs utilisés pour les enregistrement
 
 Pour une chaîne logique déjà en cours de lecture, un fallback temporairement périmé ne provoque pas immédiatement un changement de variante : `VAVOO_ACTIVE_STALE_GRACE_SECONDS` maintient la source active pendant une courte fenêtre. Une panne persistante au-delà de cette fenêtre conserve le comportement normal de quarantaine et de failover. La détection de boucle reste indépendante : une vraie boucle confirmée continue à mettre immédiatement la variante en quarantaine longue.
 
-L’état des chaînes logiques est désormais persistant par défaut. Lorsqu’une variante saine devient active, son identifiant stable et son nom sont enregistrés dans `VAVOO_LOGICAL_STATE_FILE` ; après une recréation du conteneur ou un redémarrage, elle est restaurée avant le classement qualité. Les quarantaines non expirées sont conservées dans le même fichier, de sorte qu’un redémarrage ne « pardonne » pas immédiatement à une source dont la boucle vient d’être confirmée. Les scores qualité eux-mêmes restent volontairement temporaires : seule la dernière bonne sélection et les échéances de quarantaine sont persistées, afin de ne jamais figer indéfiniment d’anciens scores. Les écritures sont atomiques et n’ont lieu que lorsque la sélection ou une quarantaine change, pas à chaque rafraîchissement de playlist.
+Une réponse HTTP 200 ne suffit plus à considérer une source comme saine : le proxy suit aussi le dernier segment annoncé par chaque playlist logique fraîche. Si ce dernier segment reste identique pendant `VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS`, l’URL signée et le cache de playlist de la variante sont invalidés, la variante reçoit la quarantaine ordinaire et la même requête tente immédiatement la variante suivante. Cela couvre le cas observé où une source restait joignable mais répétait indéfiniment la même playlist jusqu’à faire sortir Kodi de la chaîne.
+
+L’état des chaînes logiques est persistant par défaut. Lorsqu’une variante saine devient active, son identifiant stable et son nom sont enregistrés dans `VAVOO_LOGICAL_STATE_FILE` ; après une recréation du conteneur ou un redémarrage, elle est restaurée avant le classement qualité. Les quarantaines non expirées sont conservées dans le même fichier, de sorte qu’un redémarrage ne « pardonne » pas immédiatement à une source dont la boucle vient d’être confirmée. Les scores qualité eux-mêmes restent volontairement temporaires. De plus, une variante de secours explicitement détectée dans une langue étrangère (`other`) peut être utilisée pendant la session mais n’écrase pas une préférence persistante existante : un fallback portugais temporaire ne remplace donc plus une bonne source mémorisée comme variante de démarrage.
 
 ## Langue audio des variantes logiques
 
@@ -69,8 +72,9 @@ Le proxy réutilise les mêmes playlists et segments déjà téléchargés pour 
 Avec les valeurs par défaut :
 
 - une variante déclarant du français est prioritaire ;
+- une variante dont la langue est inconnue passe avant une variante explicitement détectée dans une autre langue, car « inconnue » peut simplement signifier que le flux ne déclare pas correctement son audio ;
+- une variante dans une autre langue reste utilisable en secours si aucune meilleure option n’est disponible ;
 - une variante déclarant de l’anglais sans français est exclue du failover ;
-- une variante dont la langue est inconnue reste utilisable en secours afin de ne pas perdre un flux simplement mal étiqueté ;
 - une variante active saine ne change pas uniquement parce qu’une autre obtient une meilleure qualité technique ou parce que les mesures qualité en cache viennent d’expirer.
 
 L’endpoint `/channel-groups` expose les langues détectées et la classe retenue dans les métadonnées `quality` de chaque variante (`audio_languages`, `audio_language_class`, `audio_language_allowed`).

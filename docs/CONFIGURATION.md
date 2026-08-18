@@ -35,6 +35,7 @@ docker compose up -d
 | `VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS` | `2` | Number of prefetched segments deliberately hidden from consumers so they remain behind the live edge. The effective delay is reduced automatically when the playlist is too short or the configured prefetch depth is smaller. |
 | `VAVOO_VARIANT_QUARANTINE_SECONDS` | `300` | Temporary quarantine applied to a variant after an ordinary fetch error or a persistently stale playlist. |
 | `VAVOO_ACTIVE_STALE_GRACE_SECONDS` | `8` | Grace period during which an already active logical variant remains selected when only its fresh playlist is briefly unavailable. The shorter default still tolerates a transient miss but allows failover before Kodi reaches its EOF threshold. Set to `0` to disable the grace period. |
+| `VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS` | `20` | Maximum time a fresh HTTP-200 media playlist may keep returning without advancing its newest media segment. Once exceeded, the variant is treated as stalled and failover starts. Set to `0` to disable this watchdog. |
 | `VAVOO_LOOP_DETECTION_ENABLED` | `true` | Enables the lightweight MPEG-TS/H.264 video-loop detector. |
 | `VAVOO_LOOP_SIMILARITY_THRESHOLD` | `0.70` | Minimum similarity used by video-repeat detection. |
 | `VAVOO_LOOP_MIN_COMMON_NALS` | `100` | Minimum number of common NAL units required before a repeat is meaningful. |
@@ -54,7 +55,9 @@ The same delay protects recording consumers when they use the proxy HLS endpoint
 
 For an already active logical channel, a temporarily stale fallback does not immediately switch variants: `VAVOO_ACTIVE_STALE_GRACE_SECONDS` keeps the active source selected for a short window. A persistent failure beyond the grace window still follows the normal quarantine and failover behavior. Loop detection remains independent: a genuinely confirmed loop still triggers the long loop quarantine.
 
-The logical-channel state is persistent by default. When a healthy variant becomes active, its stable variant ID and name are saved to `VAVOO_LOGICAL_STATE_FILE`; future container recreations/reboots restore it before quality ranking runs. Unexpired quarantines are stored in the same file, so a confirmed looping source is not immediately forgiven by a restart. Quality measurements themselves remain short-lived runtime data: persistence only remembers the last healthy choice and quarantine deadlines, which avoids pinning stale quality scores forever. Writes are atomic and occur only when the selected/quarantined state changes, not on every playlist refresh.
+An HTTP 200 response is no longer enough to consider a logical source healthy: the proxy also tracks the newest media segment in each fresh logical playlist. If that segment remains unchanged for `VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS`, the variant's signed URL and playlist cache are invalidated, the ordinary quarantine is applied, and the same request immediately tries the next variant. This covers sources that stay reachable while repeating a frozen playlist until Kodi abandons playback.
+
+Logical-channel state is persistent by default. When a healthy variant becomes active, its stable variant ID and name are saved to `VAVOO_LOGICAL_STATE_FILE`; future container recreations/reboots restore it before quality ranking runs. Unexpired quarantines are stored in the same file, so a confirmed looping source is not immediately forgiven by a restart. Quality measurements themselves remain short-lived runtime data. In addition, a temporary fallback explicitly detected as a foreign language (`other`) may be used during the current session but does not overwrite an existing saved preference, so a temporary Portuguese fallback cannot replace a previously remembered good startup source.
 
 ## Logical-variant audio language
 
@@ -69,8 +72,9 @@ The proxy reuses the same playlists and media segments that are already download
 With the defaults:
 
 - a variant declaring French is preferred;
+- a variant with unknown language metadata ranks ahead of a variant explicitly detected in another language, because unknown may simply mean the stream failed to tag its audio correctly;
+- a known foreign-language variant remains available as a fallback when no better option exists;
 - a variant declaring English without French is excluded from failover;
-- a variant with unknown language remains usable as a fallback so a badly tagged stream is not lost;
 - an already healthy active variant is not replaced merely because another variant has better technical quality or because cached quality measurements have just expired.
 
 The `/channel-groups` endpoint exposes the detected languages and policy result in each variant's `quality` metadata (`audio_languages`, `audio_language_class`, `audio_language_allowed`).

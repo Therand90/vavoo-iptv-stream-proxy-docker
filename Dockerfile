@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # EN: Pin the multi-platform Node.js base image by digest; Dependabot keeps it current.
-# FR : Épingle l’image Node.js multiplateforme par digest ; Dependabot la maintient à jour.
+# FR : Épingle l’image Node.js multiplateforme par digest ; Dependabot le maintient à jour.
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 
 FROM ${NODE_IMAGE} AS build
@@ -28,6 +28,7 @@ COPY patches/filter-logical-audio-language.mjs /tmp/filter-logical-audio-languag
 COPY patches/fix-logical-audio-hls-media.mjs /tmp/fix-logical-audio-hls-media.mjs
 COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-variant.mjs
 COPY patches/persist-logical-state.mjs /tmp/persist-logical-state.mjs
+COPY patches/harden-logical-source-selection.mjs /tmp/harden-logical-source-selection.mjs
 COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
@@ -56,6 +57,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/fix-logical-audio-hls-media.mjs /src/index.js \
     && node /tmp/stabilize-logical-active-variant.mjs /src/index.js \
     && node /tmp/persist-logical-state.mjs /src/index.js \
+    && node /tmp/harden-logical-source-selection.mjs /src/index.js \
     && node /tmp/delay-hls-live-edge.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
@@ -83,6 +85,9 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "VAVOO_LOGICAL_STATE_FILE" /src/index.js \
     && grep -q "logical state restored" /src/index.js \
     && grep -q "persistLogicalVariantState" /src/index.js \
+    && grep -q "VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS" /src/index.js \
+    && grep -q "logical playlist stalled" /src/index.js \
+    && grep -q "logical state keeps preferred variant" /src/index.js \
     && grep -q "VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS" /src/index.js \
     && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
     && grep -q "safety_delay=" /src/index.js \
@@ -117,6 +122,7 @@ ENV NODE_ENV=production \
     VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS=2 \
     VAVOO_VARIANT_QUARANTINE_SECONDS=300 \
     VAVOO_ACTIVE_STALE_GRACE_SECONDS=8 \
+    VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS=20 \
     VAVOO_LOOP_DETECTION_ENABLED=true \
     VAVOO_LOOP_SIMILARITY_THRESHOLD=0.70 \
     VAVOO_LOOP_MIN_COMMON_NALS=100 \
