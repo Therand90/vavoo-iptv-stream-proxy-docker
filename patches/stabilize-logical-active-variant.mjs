@@ -25,12 +25,12 @@ replaceExactlyOnce(
   'const logicalVariantState = new Map();',
   `const LOGICAL_ACTIVE_STALE_GRACE_SECONDS = (() => {
     const configured = Number.parseInt(
-        process.env.VAVOO_ACTIVE_STALE_GRACE_SECONDS || '15',
+        process.env.VAVOO_ACTIVE_STALE_GRACE_SECONDS || '8',
         10
     );
     return Number.isFinite(configured) && configured >= 0
         ? Math.min(configured, 300)
-        : 15;
+        : 8;
 })();
 
 const logicalVariantState = new Map();`,
