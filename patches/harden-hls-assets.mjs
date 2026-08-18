@@ -43,8 +43,25 @@ if (start === -1 || end === -1) {
   throw new Error('unable to locate proxyUpstreamUrl in patched upstream');
 }
 
-const replacement = `function getHlsAssetCacheKey(upstreamUrl) {
-    return HLS_ASSET_CACHE_PREFIX + upstreamUrl;
+const replacement = `function getHlsAssetCacheIdentity(upstreamUrl) {
+    try {
+        const parsed = new URL(upstreamUrl);
+        // EN: VAVOO may renew query-string credentials while keeping the same
+        //     MPEG-TS segment path. Reuse that already-prefetched payload.
+        // FR : VAVOO peut renouveler les paramètres signés tout en gardant le
+        //      même chemin de segment MPEG-TS. Réutilise alors le préchargement.
+        if (/\\.ts$/i.test(parsed.pathname)) {
+            return parsed.origin + parsed.pathname;
+        }
+    } catch (error) {
+        // Keep the exact URL as a safe fallback for malformed inputs.
+    }
+
+    return upstreamUrl;
+}
+
+function getHlsAssetCacheKey(upstreamUrl) {
+    return HLS_ASSET_CACHE_PREFIX + getHlsAssetCacheIdentity(upstreamUrl);
 }
 
 function describeHlsAssetUrl(upstreamUrl) {
@@ -256,7 +273,37 @@ async function proxyUpstreamUrl(req, res, upstreamUrl) {
 
 source = source.slice(0, start) + replacement + source.slice(end);
 
+function normalizeMpegTsIdentityForSelfTest(upstreamUrl) {
+  const parsed = new URL(upstreamUrl);
+  return /\.ts$/i.test(parsed.pathname)
+    ? parsed.origin + parsed.pathname
+    : upstreamUrl;
+}
+
+const cacheIdentityA = normalizeMpegTsIdentityForSelfTest(
+  'https://example.test/live/segment_368.ts?token=first&expires=1'
+);
+const cacheIdentityB = normalizeMpegTsIdentityForSelfTest(
+  'https://example.test/live/segment_368.ts?token=renewed&expires=2'
+);
+const playlistIdentityA = normalizeMpegTsIdentityForSelfTest(
+  'https://example.test/live/index.m3u8?token=first'
+);
+const playlistIdentityB = normalizeMpegTsIdentityForSelfTest(
+  'https://example.test/live/index.m3u8?token=renewed'
+);
+
+if (cacheIdentityA !== cacheIdentityB) {
+  throw new Error('MPEG-TS cache identity must ignore renewed query credentials');
+}
+if (playlistIdentityA === playlistIdentityB) {
+  throw new Error('non-media cache identity must keep the exact signed URL');
+}
+if (!source.includes('getHlsAssetCacheIdentity')) {
+  throw new Error('normalized HLS asset cache identity marker missing');
+}
+
 writeFileSync(target, source, 'utf8');
 console.log(
-  '[therand] patched HLS asset retries and short-lived cache: ' + target
+  '[therand] patched HLS asset retries and signed-URL-stable MPEG-TS cache: ' + target
 );
