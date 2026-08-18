@@ -20,7 +20,7 @@ services:
       VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS: ${VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS:-1500}
       VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS: ${VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS:-2}
       VAVOO_VARIANT_QUARANTINE_SECONDS: ${VAVOO_VARIANT_QUARANTINE_SECONDS:-300}
-      VAVOO_ACTIVE_STALE_GRACE_SECONDS: ${VAVOO_ACTIVE_STALE_GRACE_SECONDS:-15}
+      VAVOO_ACTIVE_STALE_GRACE_SECONDS: ${VAVOO_ACTIVE_STALE_GRACE_SECONDS:-8}
       VAVOO_LOOP_DETECTION_ENABLED: ${VAVOO_LOOP_DETECTION_ENABLED:-true}
       VAVOO_LOOP_SIMILARITY_THRESHOLD: ${VAVOO_LOOP_SIMILARITY_THRESHOLD:-0.70}
       VAVOO_LOOP_MIN_COMMON_NALS: ${VAVOO_LOOP_MIN_COMMON_NALS:-100}
@@ -33,6 +33,7 @@ services:
       VAVOO_AUDIO_PREFERRED_LANGUAGES: ${VAVOO_AUDIO_PREFERRED_LANGUAGES:-fra,fre,fr}
       VAVOO_AUDIO_BLOCKED_LANGUAGES: ${VAVOO_AUDIO_BLOCKED_LANGUAGES:-eng,en}
       VAVOO_HLS_PROXY_SECRET: ${VAVOO_HLS_PROXY_SECRET:-}
+      VAVOO_LOGICAL_STATE_FILE: ${VAVOO_LOGICAL_STATE_FILE:-/data/logical-state.json}
 
     command:
       - --http-host
@@ -50,6 +51,11 @@ services:
     # FR : Gardez la boucle locale par défaut sauf si un réseau privé de confiance doit y accéder.
     ports:
       - "${VAVOO_BIND_ADDRESS:-127.0.0.1}:${VAVOO_PORT:-8899}:8888"
+
+    # EN: The root filesystem stays read-only; only logical-channel state is persisted here.
+    # FR : Le système de fichiers racine reste en lecture seule ; seul l'état des chaînes logiques est persisté ici.
+    volumes:
+      - vavoo-state:/data
 
     read_only: true
     tmpfs:
@@ -69,3 +75,6 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+volumes:
+  vavoo-state:

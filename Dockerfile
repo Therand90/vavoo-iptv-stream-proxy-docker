@@ -27,6 +27,7 @@ COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
 COPY patches/filter-logical-audio-language.mjs /tmp/filter-logical-audio-language.mjs
 COPY patches/fix-logical-audio-hls-media.mjs /tmp/fix-logical-audio-hls-media.mjs
 COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-variant.mjs
+COPY patches/persist-logical-state.mjs /tmp/persist-logical-state.mjs
 COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
@@ -54,6 +55,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/filter-logical-audio-language.mjs /src/index.js \
     && node /tmp/fix-logical-audio-hls-media.mjs /src/index.js \
     && node /tmp/stabilize-logical-active-variant.mjs /src/index.js \
+    && node /tmp/persist-logical-state.mjs /src/index.js \
     && node /tmp/delay-hls-live-edge.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
@@ -78,6 +80,9 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "VAVOO_ACTIVE_STALE_GRACE_SECONDS" /src/index.js \
     && grep -q "logical active stale grace" /src/index.js \
     && grep -q "Quality-cache expiry alone must not unstick" /src/index.js \
+    && grep -q "VAVOO_LOGICAL_STATE_FILE" /src/index.js \
+    && grep -q "logical state restored" /src/index.js \
+    && grep -q "persistLogicalVariantState" /src/index.js \
     && grep -q "VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS" /src/index.js \
     && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
     && grep -q "safety_delay=" /src/index.js \
@@ -111,7 +116,7 @@ ENV NODE_ENV=production \
     VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS=1500 \
     VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS=2 \
     VAVOO_VARIANT_QUARANTINE_SECONDS=300 \
-    VAVOO_ACTIVE_STALE_GRACE_SECONDS=15 \
+    VAVOO_ACTIVE_STALE_GRACE_SECONDS=8 \
     VAVOO_LOOP_DETECTION_ENABLED=true \
     VAVOO_LOOP_SIMILARITY_THRESHOLD=0.70 \
     VAVOO_LOOP_MIN_COMMON_NALS=100 \
@@ -122,11 +127,16 @@ ENV NODE_ENV=production \
     VAVOO_QUALITY_CACHE_SECONDS=1800 \
     VAVOO_AUDIO_LANGUAGE_FILTER_ENABLED=true \
     VAVOO_AUDIO_PREFERRED_LANGUAGES=fra,fre,fr \
-    VAVOO_AUDIO_BLOCKED_LANGUAGES=eng,en
+    VAVOO_AUDIO_BLOCKED_LANGUAGES=eng,en \
+    VAVOO_LOGICAL_STATE_FILE=/data/logical-state.json
 
 WORKDIR /app
 
 COPY --from=build --chown=node:node /src /app
+
+# EN: Writable named volume target used only for small persistent logical-channel state.
+# FR : Cible de volume nommée inscriptible réservée au petit état persistant des chaînes logiques.
+RUN mkdir -p /data && chown node:node /data
 
 USER node
 
