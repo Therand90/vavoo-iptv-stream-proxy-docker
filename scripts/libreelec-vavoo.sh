@@ -121,6 +121,7 @@ run_container() {
     --init \
     --env-file "$ENV_FILE" \
     "$@" \
+    --volume "${NAME}-state:/data" \
     --read-only \
     --tmpfs "/tmp:rw,size=16m,mode=1777" \
     --cap-drop ALL \
@@ -310,7 +311,7 @@ main() {
     cleanup) cleanup_images ;;
     uninstall)
       docker rm -f "$NAME" >/dev/null 2>&1 || true
-      say "Container removed; configuration kept in $CONFIG_DIR / Conteneur supprimé ; configuration conservée dans $CONFIG_DIR."
+      say "Container removed; configuration and logical state kept / Conteneur supprimé ; configuration et état logique conservés."
       ;;
     help|-h|--help) usage ;;
     *)
