@@ -44,7 +44,7 @@ replaceExactlyOnce(
   'const HLS_ASSET_CACHE_TTL_SECONDS = 45;',
   `const HLS_ASSET_CACHE_TTL_SECONDS = readIntegerEnvironment(
     'VAVOO_HLS_ASSET_CACHE_TTL_SECONDS',
-    45,
+    120,
     1,
     600
 );`,
