@@ -177,16 +177,18 @@ jobs:
           loop_enabled="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_DETECTION_ENABLED"')"
           loop_threshold="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_SIMILARITY_THRESHOLD"')"
           loop_confirmations="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_CONFIRMATIONS"')"
+          loop_quarantine="$(docker run --rm --entrypoint sh "$LOCAL_IMAGE" -c 'printf %s "$VAVOO_LOOP_QUARANTINE_SECONDS"')"
 
           test "$catalog_ttl" = "21600"
           test "$stream_ttl" = "3000"
           test "$playlist_ttl" = "300"
-          test "$asset_ttl" = "45"
+          test "$asset_ttl" = "120"
           test "$asset_max" = "12582912"
           test "$prefetch_count" = "2"
           test "$loop_enabled" = "true"
           test "$loop_threshold" = "0.70"
           test "$loop_confirmations" = "2"
+          test "$loop_quarantine" = "86400"
 
       - name: Smoke-test catalog and renewable HLS entry point
         if: steps.decision.outputs.build == 'true'
