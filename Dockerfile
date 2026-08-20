@@ -30,6 +30,7 @@ COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-
 COPY patches/persist-logical-state.mjs /tmp/persist-logical-state.mjs
 COPY patches/harden-logical-source-selection.mjs /tmp/harden-logical-source-selection.mjs
 COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
+COPY patches/fix-runtime-playback-edge-cases.mjs /tmp/fix-runtime-playback-edge-cases.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -59,11 +60,13 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/persist-logical-state.mjs /src/index.js \
     && node /tmp/harden-logical-source-selection.mjs /src/index.js \
     && node /tmp/delay-hls-live-edge.mjs /src/index.js \
+    && node /tmp/fix-runtime-playback-edge-cases.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_HEDGE_DELAY_MS" /src/index.js \
     && grep -q "hls asset hedge won" /src/index.js \
+    && grep -q "hls asset cache range hit" /src/index.js \
     && grep -q "VAVOO_PLAYLIST_HEDGE_DELAY_MS" /src/index.js \
     && grep -q "VAVOO_PLAYLIST_FAST_FALLBACK_MS" /src/index.js \
     && grep -q "playlist hedge won" /src/index.js \
@@ -73,6 +76,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "logical variant selected" /src/index.js \
     && grep -q "logical loop confirmed" /src/index.js \
     && grep -q "logical timeline discontinuity" /src/index.js \
+    && grep -q "logical playlist collapsed" /src/index.js \
     && grep -q "lastSourceFirst" /src/index.js \
     && grep -q "logical quality ranking" /src/index.js \
     && grep -q "logical quality probe" /src/index.js \
