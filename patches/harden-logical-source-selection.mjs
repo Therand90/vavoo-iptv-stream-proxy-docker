@@ -64,7 +64,19 @@ const LOGICAL_PLAYLIST_STALL_SECONDS = (() => {
         : 20;
 })();
 
+const LOGICAL_MEDIA_PROBE_TIMEOUT_MS = (() => {
+    const configured = Number.parseInt(
+        process.env.VAVOO_LOGICAL_MEDIA_PROBE_TIMEOUT_MS || '4500',
+        10
+    );
+    return Number.isFinite(configured) && configured >= 1000
+        ? Math.min(configured, 15000)
+        : 4500;
+})();
+
+const LOGICAL_MEDIA_HEALTH_CACHE_MS = 30000;
 const logicalPlaylistProgress = new Map();
+const logicalMediaHealth = new Map();
 
 function getLogicalPlaylistProgressKey(group, variant) {
     return group.id + '|' + variant.id;
@@ -117,13 +129,107 @@ function isLogicalPlaylistStalled(group, variant, upstream) {
     );
     return true;
 }
+
+function getLogicalMediaHealthKey(group, variant) {
+    return group.id + '|' + variant.id;
+}
+
+async function fetchLogicalMediaProbeAsset(req, segmentUrl) {
+    const cacheKey = getHlsAssetCacheKey(segmentUrl);
+    const cached = cache.get(cacheKey);
+    if (cached && cached.kind === 'asset' && cached.body) {
+        return cached;
+    }
+
+    const upstreamLabel = describeHlsAssetUrl(segmentUrl);
+    const parentSignal = AbortSignal.timeout(LOGICAL_MEDIA_PROBE_TIMEOUT_MS);
+    const started = startSharedHlsAssetFetch(
+        req,
+        segmentUrl,
+        parentSignal,
+        upstreamLabel
+    );
+
+    let timeoutId;
+    const timeout = new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error('logical media probe timeout'));
+        }, LOGICAL_MEDIA_PROBE_TIMEOUT_MS);
+    });
+
+    try {
+        const result = await Promise.race([started.promise, timeout]);
+        if (!result || result.kind !== 'asset' || !result.body) {
+            throw new Error('logical media probe returned no asset');
+        }
+        cacheHlsAsset(cacheKey, result);
+        return result;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function isLogicalVariantMediaLive(req, group, variant, upstream) {
+    if (!upstream || upstream.stale || group.variants.length < 2) {
+        return true;
+    }
+
+    const key = getLogicalMediaHealthKey(group, variant);
+    const healthyUntil = logicalMediaHealth.get(key) || 0;
+    if (healthyUntil > Date.now()) {
+        return true;
+    }
+
+    const segments = getMediaPlaylistSegments(
+        upstream.streamUrl,
+        upstream.playlist
+    );
+    if (!segments.length) {
+        return true;
+    }
+
+    // EN: Probe the first segments Kodi is about to consume, not only the
+    // newest live-edge segments. One successful payload is enough to prove
+    // that the playlist points to reachable media.
+    // FR : Sonde les premiers segments que Kodi va consommer, pas seulement
+    // ceux du bord du direct. Un seul payload réussi suffit à valider le média.
+    const candidates = segments.slice(0, Math.min(2, segments.length));
+
+    try {
+        const winner = await Promise.any(
+            candidates.map(async (segment) => {
+                const asset = await fetchLogicalMediaProbeAsset(req, segment.url);
+                return { segment, asset };
+            })
+        );
+        logicalMediaHealth.set(
+            key,
+            Date.now() + LOGICAL_MEDIA_HEALTH_CACHE_MS
+        );
+        console.log(
+            '[vavoo] logical media probe ok "' + group.name +
+            '" variant="' + variant.name +
+            '" sequence=' + winner.segment.sequence
+        );
+        return true;
+    } catch (error) {
+        logicalMediaHealth.delete(key);
+        console.log(
+            '[vavoo] logical media unavailable "' + group.name +
+            '" variant="' + variant.name +
+            '" candidates=' + candidates.length +
+            ' timeout_ms=' + LOGICAL_MEDIA_PROBE_TIMEOUT_MS
+        );
+        return false;
+    }
+}
 `;
 
 replaceExactlyOnce(
   '\nfunction findLogicalPersistedVariant(group, variantId, variantName) {',
   '\n' + playlistProgressHelpers +
     '\nfunction findLogicalPersistedVariant(group, variantId, variantName) {',
-  'logical playlist progress watchdog insertion'
+  'logical playlist and media watchdog insertion'
 );
 
 replaceExactlyOnce(
@@ -140,9 +246,25 @@ replaceExactlyOnce(
                 continue;
             }
 
+            if (!await isLogicalVariantMediaLive(
+                req,
+                group,
+                variant,
+                upstream
+            )) {
+                cache.del(getStreamUrlCacheKey(variant));
+                cache.del(getPlaylistCacheKey(variant));
+                markLogicalVariantFailure(
+                    group,
+                    variant,
+                    'playlist reachable but media segments unavailable'
+                );
+                continue;
+            }
+
             markLogicalVariantSuccess(group, variant);
             return { ...upstream, variant };`,
-  'logical stalled-playlist failover hook'
+  'logical stalled-playlist and media-liveness failover hook'
 );
 
 replaceExactlyOnce(
@@ -193,6 +315,9 @@ replaceExactlyOnce(
 if (
   !source.includes('logical playlist stalled') ||
   !source.includes('VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS') ||
+  !source.includes('VAVOO_LOGICAL_MEDIA_PROBE_TIMEOUT_MS') ||
+  !source.includes('logical media unavailable') ||
+  !source.includes('playlist reachable but media segments unavailable') ||
   !source.includes('logical state keeps preferred variant') ||
   !source.includes("classification === 'unknown' || classification === 'disabled'")
 ) {
@@ -201,6 +326,6 @@ if (
 
 writeFileSync(target, source, 'utf8');
 console.log(
-  '[therand] patched logical source language priority, stall watchdog and persistence guard: ' +
+  '[therand] patched logical source language priority, playlist/media watchdogs and persistence guard: ' +
   target
 );
