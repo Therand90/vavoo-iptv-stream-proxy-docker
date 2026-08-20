@@ -212,6 +212,7 @@ function restoreLogicalVariantState(group, state) {
     );
     if (active && !state.quarantinedUntil.has(active.id)) {
         state.activeVariantId = active.id;
+        state.restoredActiveNeedsValidation = true;
     }
 
     console.log(
@@ -264,11 +265,13 @@ replaceExactlyOnce(
 replaceExactlyOnce(
   `    state.quarantinedUntil.delete(variant.id);
     state.staleSinceByVariant.delete(variant.id);
+    state.restoredActiveNeedsValidation = false;
     state.activeVariantId = variant.id;
 
     if (previousId !== variant.id) {`,
   `    state.quarantinedUntil.delete(variant.id);
     state.staleSinceByVariant.delete(variant.id);
+    state.restoredActiveNeedsValidation = false;
     state.activeVariantId = variant.id;
 
     if (previousId !== variant.id || wasQuarantined) {
@@ -279,7 +282,14 @@ replaceExactlyOnce(
   'persistent logical-state success hook'
 );
 
+if (
+  !source.includes('restoredActiveNeedsValidation = true') ||
+  !source.includes('restoredActiveNeedsValidation = false')
+) {
+  throw new Error('persistent restored-active validation verification failed');
+}
+
 writeFileSync(target, source, 'utf8');
 console.log(
-  '[therand] patched persistent logical variant state: ' + target
+  '[therand] patched persistent logical variant state and restored-active validation: ' + target
 );

@@ -2,7 +2,7 @@
 
 ## English
 
-Two startup failure modes are handled explicitly by the Docker wrapper.
+Three startup failure modes are handled explicitly by the Docker wrapper.
 
 ### Catalog cold start
 
@@ -16,6 +16,14 @@ The VAVOO catalog can take roughly twenty seconds to rebuild from the upstream A
 
 This snapshot is only a startup accelerator. A successful upstream refresh always replaces it and remains authoritative.
 
+### Restored active variant validation
+
+The persisted logical state keeps the last successful active variant across container recreations, but the quality/audio measurements are intentionally kept only in memory. A restored active variant therefore has no fresh quality evidence immediately after restart.
+
+The proxy now marks such a restored active variant for one-shot validation. On the first logical selection after restore, the normal real-media ranking runs across the currently eligible variants before stickiness is re-enabled. Once one variant is successfully selected, the validation flag is cleared and ordinary sticky behavior resumes.
+
+This is deliberately not a periodic re-ranking mechanism. When the in-memory quality cache expires later during established playback, that expiry alone still does not replace a healthy active variant.
+
 ### Playlist reachable, media unreachable
 
 A logical variant is no longer considered healthy only because its `.m3u8` playlist returns HTTP 200. Before selecting a fresh logical variant, the proxy probes up to the first two media segments Kodi is about to consume. The probe has a short 4.5-second budget and accepts the variant as soon as one segment is reachable.
@@ -28,7 +36,7 @@ The probe reuses the existing HLS asset cache and shared in-flight fetches, so a
 
 ## Français
 
-Deux causes d’échec au démarrage sont maintenant gérées explicitement par le wrapper Docker.
+Trois causes d’échec au démarrage sont maintenant gérées explicitement par le wrapper Docker.
 
 ### Démarrage à froid du catalogue
 
@@ -41,6 +49,14 @@ La reconstruction du catalogue VAVOO depuis l’API amont peut prendre une vingt
 - lorsqu’un snapshot récent a dépassé le TTL normal de six heures, le sert immédiatement puis actualise le catalogue en arrière-plan.
 
 Le snapshot sert uniquement d’accélérateur de démarrage. Dès qu’un rafraîchissement amont réussit, ce nouveau catalogue remplace le snapshot et redevient la référence.
+
+### Validation de la variante active restaurée
+
+L’état logique persistant conserve la dernière variante active qui a fonctionné après une recréation du conteneur, mais les mesures qualité/langue restent volontairement uniquement en mémoire. Une variante active restaurée ne dispose donc d’aucune mesure fraîche juste après le redémarrage.
+
+Le proxy marque maintenant cette variante pour une validation unique. Lors de la première sélection logique après restauration, le classement normal basé sur les médias réels est exécuté sur les variantes encore éligibles avant de réactiver le comportement sticky. Dès qu’une variante est sélectionnée avec succès, le marqueur de validation est effacé et la sélection redevient stable.
+
+Ce mécanisme n’est volontairement pas un reclassement périodique. Lorsque le cache qualité en mémoire expire plus tard pendant une lecture établie, cette expiration seule ne remplace toujours pas une variante active saine.
 
 ### Playlist joignable mais média inaccessible
 

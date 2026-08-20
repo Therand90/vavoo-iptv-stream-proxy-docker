@@ -45,7 +45,8 @@ replaceExactlyOnce(
   `        state = {
             activeVariantId: null,
             quarantinedUntil: new Map(),
-            staleSinceByVariant: new Map()
+            staleSinceByVariant: new Map(),
+            restoredActiveNeedsValidation: false
         };`,
   'logical stale-state insertion'
 );
@@ -87,6 +88,7 @@ replaceExactlyOnce(
     state.activeVariantId = variant.id;`,
   `    state.quarantinedUntil.delete(variant.id);
     state.staleSinceByVariant.delete(variant.id);
+    state.restoredActiveNeedsValidation = false;
     state.activeVariantId = variant.id;`,
   'logical stale-state success cleanup'
 );
@@ -143,17 +145,37 @@ replaceExactlyOnce(
             return ordered;
         }`,
   `        const activeQuality = getLogicalQualityCached(group, active);
-        // EN: Quality-cache expiry alone must not unstick an active variant.
-        // FR : L'expiration du cache qualité seule ne doit pas déverrouiller
-        // une variante active.
-        if (!activeQuality || !isLogicalAudioBlocked(activeQuality)) {
+        // EN: A restored active variant is validated once because quality
+        // measurements are intentionally not persisted across restarts.
+        // Quality-cache expiry alone must not unstick a healthy active variant
+        // later during established playback.
+        // FR : Une variante active restaurée est validée une seule fois car
+        // les mesures qualité ne sont volontairement pas persistées. Ensuite,
+        // l'expiration du cache qualité seule ne doit pas déverrouiller une
+        // variante active saine pendant la lecture.
+        if (!activeQuality) {
+            if (!state.restoredActiveNeedsValidation) {
+                return ordered;
+            }
+            console.log(
+                '[vavoo] logical restored active quality validation "' +
+                group.name + '" variant="' + active.name + '"'
+            );
+        } else if (!isLogicalAudioBlocked(activeQuality)) {
             return ordered;
         }`,
-  'logical active quality-cache stickiness fix'
+  'logical restored-active one-shot quality validation'
 );
+
+if (
+  !source.includes('restoredActiveNeedsValidation') ||
+  !source.includes('logical restored active quality validation')
+) {
+  throw new Error('restored active quality validation verification failed');
+}
 
 writeFileSync(target, source, 'utf8');
 console.log(
-  '[therand] patched sticky logical variants and stale-playlist grace: ' +
+  '[therand] patched sticky logical variants, restored-active validation and stale-playlist grace: ' +
   target
 );
