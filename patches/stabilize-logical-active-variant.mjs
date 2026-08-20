@@ -147,8 +147,8 @@ replaceExactlyOnce(
   `        const activeQuality = getLogicalQualityCached(group, active);
         // EN: A restored active variant is validated once because quality
         // measurements are intentionally not persisted across restarts.
-        // Later quality-cache expiry alone must not unstick a healthy active
-        // variant during established playback.
+        // Quality-cache expiry alone must not unstick a healthy active variant
+        // later during established playback.
         // FR : Une variante active restaurée est validée une seule fois car
         // les mesures qualité ne sont volontairement pas persistées. Ensuite,
         // l'expiration du cache qualité seule ne doit pas déverrouiller une
