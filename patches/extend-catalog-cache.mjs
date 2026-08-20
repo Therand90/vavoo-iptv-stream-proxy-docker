@@ -174,10 +174,10 @@ replaceExactlyOnce(
         try {
             const channels = await loadCatalogFromBase(baseUrl, signature);
             cache.set(CHANNELS_CACHE_KEY, channels, 300);
-            console.log(\`[vavoo] channels loaded from ${baseUrl}: ${channels.length}\`);
+            console.log(\`[vavoo] channels loaded from \${baseUrl}: \${channels.length}\`);
             return channels;
         } catch (error) {
-            console.log(\`[vavoo] catalog load failed for ${baseUrl}: ${error.message}\`);
+            console.log(\`[vavoo] catalog load failed for \${baseUrl}: \${error.message}\`);
         }
     }
 
@@ -216,17 +216,17 @@ replaceExactlyOnce(
 replaceExactlyOnce(
   `app.listen(port, () => {
     const baseUrl = getLocalBaseUrl();
-    console.log(\`Listening on ${baseUrl}/\`);
-    console.log(\`M3U: ${baseUrl}/channels.m3u8\`);
-    console.log(\`Example filtered M3U: ${baseUrl}/channels.m3u8?country=Germany\`);
-    console.log(\`Countries: ${baseUrl}/countries\`);
+    console.log(\`Listening on \${baseUrl}/\`);
+    console.log(\`M3U: \${baseUrl}/channels.m3u8\`);
+    console.log(\`Example filtered M3U: \${baseUrl}/channels.m3u8?country=Germany\`);
+    console.log(\`Countries: \${baseUrl}/countries\`);
 });`,
   `app.listen(port, () => {
     const baseUrl = getLocalBaseUrl();
-    console.log(\`Listening on ${baseUrl}/\`);
-    console.log(\`M3U: ${baseUrl}/channels.m3u8\`);
-    console.log(\`Example filtered M3U: ${baseUrl}/channels.m3u8?country=Germany\`);
-    console.log(\`Countries: ${baseUrl}/countries\`);
+    console.log(\`Listening on \${baseUrl}/\`);
+    console.log(\`M3U: \${baseUrl}/channels.m3u8\`);
+    console.log(\`Example filtered M3U: \${baseUrl}/channels.m3u8?country=Germany\`);
+    console.log(\`Countries: \${baseUrl}/countries\`);
 
     void getChannels()
         .then((channels) => {
