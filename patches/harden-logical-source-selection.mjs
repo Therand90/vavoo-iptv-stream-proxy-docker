@@ -64,16 +64,7 @@ const LOGICAL_PLAYLIST_STALL_SECONDS = (() => {
         : 20;
 })();
 
-const LOGICAL_MEDIA_PROBE_TIMEOUT_MS = (() => {
-    const configured = Number.parseInt(
-        process.env.VAVOO_LOGICAL_MEDIA_PROBE_TIMEOUT_MS || '4500',
-        10
-    );
-    return Number.isFinite(configured) && configured >= 1000
-        ? Math.min(configured, 15000)
-        : 4500;
-})();
-
+const LOGICAL_MEDIA_PROBE_TIMEOUT_MS = 4500;
 const LOGICAL_MEDIA_HEALTH_CACHE_MS = 30000;
 const logicalPlaylistProgress = new Map();
 const logicalMediaHealth = new Map();
@@ -315,7 +306,6 @@ replaceExactlyOnce(
 if (
   !source.includes('logical playlist stalled') ||
   !source.includes('VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS') ||
-  !source.includes('VAVOO_LOGICAL_MEDIA_PROBE_TIMEOUT_MS') ||
   !source.includes('logical media unavailable') ||
   !source.includes('playlist reachable but media segments unavailable') ||
   !source.includes('logical state keeps preferred variant') ||
