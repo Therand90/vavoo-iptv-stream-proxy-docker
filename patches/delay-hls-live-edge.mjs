@@ -229,12 +229,17 @@ replaceExactlyOnce(
                     cachedAsset
                 );
                 if (served) {
-                    console.log(
-                        '[' + connId + '] hls asset ' +
-                        (rangeHeader ? 'range cache hit' : 'cache hit') +
-                        ' "' + upstreamLabel + '"' +
-                        (rangeHeader ? ' range="' + rangeHeader + '"' : '')
-                    );
+                    if (rangeHeader) {
+                        console.log(
+                            '[' + connId + '] hls asset range cache hit "' +
+                            upstreamLabel + '" range="' + rangeHeader + '"'
+                        );
+                    } else {
+                        console.log(
+                            '[' + connId + '] hls asset cache hit "' +
+                            upstreamLabel + '"'
+                        );
+                    }
                     return;
                 }
             }
