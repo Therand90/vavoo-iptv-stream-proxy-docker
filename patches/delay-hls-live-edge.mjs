@@ -39,7 +39,10 @@ replaceExactlyOnce(
 })();
 const HLS_LIVE_EDGE_MIN_VISIBLE_SEGMENTS = 3;
 
-function applyHlsLiveEdgeSafetyDelay(playlist) {
+function applyHlsLiveEdgeSafetyDelay(
+    playlist,
+    requestedDelaySegments = HLS_LIVE_EDGE_DELAY_SEGMENTS
+) {
     const original = String(playlist || '');
     const lines = original.split(/\\r?\\n/);
     const trimmedLines = lines.map((line) => line.trim());
@@ -73,7 +76,7 @@ function applyHlsLiveEdgeSafetyDelay(playlist) {
         upstreamSegments - HLS_LIVE_EDGE_MIN_VISIBLE_SEGMENTS
     );
     const hiddenSegments = Math.min(
-        HLS_LIVE_EDGE_DELAY_SEGMENTS,
+        requestedDelaySegments,
         HLS_PREFETCH_SEGMENT_COUNT,
         maxSafeDelay
     );
@@ -106,6 +109,170 @@ async function proxyUpstreamUrl(req, res, upstreamUrl) {`,
 );
 
 replaceExactlyOnce(
+  `function sendBufferedAsset(res, asset) {
+    copyBufferedAssetHeaders(res, asset);
+    res.status(asset.status || 200).send(asset.body);
+}`,
+  `function sendBufferedAsset(res, asset) {
+    copyBufferedAssetHeaders(res, asset);
+    res.status(asset.status || 200).send(asset.body);
+}
+
+function getBufferedAssetRange(rangeHeader, totalLength) {
+    const value = String(rangeHeader || '').trim();
+    if (!value) {
+        return { kind: 'full' };
+    }
+
+    const match = /^bytes=(\\d*)-(\\d*)$/i.exec(value);
+    if (!match || (!match[1] && !match[2])) {
+        return { kind: 'unsupported' };
+    }
+
+    let start;
+    let end;
+
+    if (!match[1]) {
+        const suffixLength = Number.parseInt(match[2], 10);
+        if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+            return { kind: 'unsupported' };
+        }
+        if (totalLength <= 0) {
+            return { kind: 'unsatisfiable' };
+        }
+        start = Math.max(0, totalLength - suffixLength);
+        end = totalLength - 1;
+    } else {
+        start = Number.parseInt(match[1], 10);
+        end = match[2]
+            ? Number.parseInt(match[2], 10)
+            : totalLength - 1;
+
+        if (
+            !Number.isFinite(start) ||
+            !Number.isFinite(end) ||
+            start < 0 ||
+            start >= totalLength ||
+            end < start
+        ) {
+            return { kind: 'unsatisfiable' };
+        }
+
+        end = Math.min(end, totalLength - 1);
+    }
+
+    return { kind: 'range', start, end };
+}
+
+function sendBufferedAssetForRequest(req, res, asset) {
+    const range = getBufferedAssetRange(
+        req.headers.range,
+        asset.body.length
+    );
+
+    if (range.kind === 'unsupported') {
+        return false;
+    }
+
+    if (range.kind === 'full') {
+        sendBufferedAsset(res, asset);
+        return true;
+    }
+
+    if (range.kind === 'unsatisfiable') {
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Content-Range', 'bytes */' + asset.body.length);
+        res.status(416).end();
+        return true;
+    }
+
+    const body = asset.body.subarray(range.start, range.end + 1);
+    copyBufferedAssetHeaders(res, asset);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader(
+        'Content-Range',
+        'bytes ' + range.start + '-' + range.end + '/' + asset.body.length
+    );
+    res.setHeader('Content-Length', String(body.length));
+    res.status(206).send(body);
+    return true;
+}`,
+  'range-aware buffered HLS asset serving helpers'
+);
+
+replaceExactlyOnce(
+  `    const canUseAssetCache = !req.headers.range;`,
+  `    const rangeHeader = String(req.headers.range || '').trim();
+    const canReadAssetCache = !rangeHeader || /^bytes=\\d*-\\d*$/i.test(rangeHeader);
+    const canStoreAssetCache = !rangeHeader;`,
+  'range-aware HLS asset cache flags'
+);
+
+replaceExactlyOnce(
+  `        if (canUseAssetCache) {
+            const cachedAsset = cache.get(cacheKey);
+            if (cachedAsset) {
+                console.log(
+                    '[' + connId + '] hls asset cache hit "' +
+                    upstreamLabel + '"'
+                );
+                sendBufferedAsset(res, cachedAsset);
+                return;
+            }
+        }`,
+  `        if (canReadAssetCache) {
+            const cachedAsset = cache.get(cacheKey);
+            if (cachedAsset) {
+                const served = sendBufferedAssetForRequest(
+                    req,
+                    res,
+                    cachedAsset
+                );
+                if (served) {
+                    console.log(
+                        '[' + connId + '] hls asset ' +
+                        (rangeHeader ? 'range cache hit' : 'cache hit') +
+                        ' "' + upstreamLabel + '"' +
+                        (rangeHeader ? ' range="' + rangeHeader + '"' : '')
+                    );
+                    return;
+                }
+            }
+        }`,
+  'range-aware HLS asset cache read'
+);
+
+replaceExactlyOnce(
+  `        if (canUseAssetCache) {
+            cacheHlsAsset(cacheKey, result);
+        }`,
+  `        if (canStoreAssetCache) {
+            cacheHlsAsset(cacheKey, result);
+        }`,
+  'full-response-only HLS asset cache storage'
+);
+
+replaceExactlyOnce(
+  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(upstream.playlist);`,
+  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(
+            upstream.playlist,
+            upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS
+        );`,
+  'renewable HLS stale safety-buffer drain'
+);
+
+replaceExactlyOnce(
+  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(upstream.playlist);
+        const logicalPlaylist = rewriteLogicalPlaylistTimeline(`,
+  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(
+            upstream.playlist,
+            upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS
+        );
+        const logicalPlaylist = rewriteLogicalPlaylistTimeline(`,
+  'logical HLS stale safety-buffer drain'
+);
+
+replaceExactlyOnce(
   `        const rewrittenPlaylist = rewriteM3u8Playlist(
             req,
             upstream.streamUrl,
@@ -117,7 +284,10 @@ replaceExactlyOnce(
             upstream.playlist,
             channel.name
         );`,
-  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(upstream.playlist);
+  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(
+            upstream.playlist,
+            upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS
+        );
         const rewrittenPlaylist = rewriteM3u8Playlist(
             req,
             upstream.streamUrl,
@@ -138,7 +308,10 @@ replaceExactlyOnce(
             upstream.variant,
             upstream.playlist
         );`,
-  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(upstream.playlist);
+  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(
+            upstream.playlist,
+            upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS
+        );
         const logicalPlaylist = rewriteLogicalPlaylistTimeline(
             group,
             upstream.variant,
@@ -168,8 +341,40 @@ replaceExactly(
   'HLS live-edge diagnostics'
 );
 
+function parseRangeForSelfTest(value, length) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(value);
+  if (!match || (!match[1] && !match[2])) return null;
+  if (!match[1]) {
+    const suffix = Number.parseInt(match[2], 10);
+    return [Math.max(0, length - suffix), length - 1];
+  }
+  const start = Number.parseInt(match[1], 10);
+  const end = match[2]
+    ? Math.min(Number.parseInt(match[2], 10), length - 1)
+    : length - 1;
+  return [start, end];
+}
+
+const rangeA = parseRangeForSelfTest('bytes=0-', 1000);
+const rangeB = parseRangeForSelfTest('bytes=100-199', 1000);
+const rangeC = parseRangeForSelfTest('bytes=-100', 1000);
+if (
+  !rangeA || rangeA[0] !== 0 || rangeA[1] !== 999 ||
+  !rangeB || rangeB[0] !== 100 || rangeB[1] !== 199 ||
+  !rangeC || rangeC[0] !== 900 || rangeC[1] !== 999
+) {
+  throw new Error('buffered HLS range self-test failed');
+}
+
+if (
+  !source.includes('hls asset range cache hit') ||
+  !source.includes('upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS')
+) {
+  throw new Error('HLS safety-buffer drain verification failed');
+}
+
 writeFileSync(target, source, 'utf8');
 console.log(
-  '[therand] patched HLS live-edge safety delay: ' + target +
-  ' (default 2 segments)'
+  '[therand] patched HLS live-edge safety delay, stale-buffer drain and range-aware cache serving: ' +
+  target + ' (default 2 segments)'
 );
