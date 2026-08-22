@@ -253,26 +253,6 @@ replaceExactlyOnce(
 );
 
 replaceExactlyOnce(
-  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(upstream.playlist);`,
-  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(
-            upstream.playlist,
-            upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS
-        );`,
-  'renewable HLS stale safety-buffer drain'
-);
-
-replaceExactlyOnce(
-  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(upstream.playlist);
-        const logicalPlaylist = rewriteLogicalPlaylistTimeline(`,
-  `        const liveEdge = applyHlsLiveEdgeSafetyDelay(
-            upstream.playlist,
-            upstream.stale ? 0 : HLS_LIVE_EDGE_DELAY_SEGMENTS
-        );
-        const logicalPlaylist = rewriteLogicalPlaylistTimeline(`,
-  'logical HLS stale safety-buffer drain'
-);
-
-replaceExactlyOnce(
   `        const rewrittenPlaylist = rewriteM3u8Playlist(
             req,
             upstream.streamUrl,
