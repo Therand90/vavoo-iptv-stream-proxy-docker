@@ -29,6 +29,7 @@ COPY patches/fix-logical-audio-hls-media.mjs /tmp/fix-logical-audio-hls-media.mj
 COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-variant.mjs
 COPY patches/persist-logical-state.mjs /tmp/persist-logical-state.mjs
 COPY patches/harden-logical-source-selection.mjs /tmp/harden-logical-source-selection.mjs
+COPY patches/rerank-logical-variants-after-failure.mjs /tmp/rerank-logical-variants-after-failure.mjs
 COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
@@ -58,6 +59,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/stabilize-logical-active-variant.mjs /src/index.js \
     && node /tmp/persist-logical-state.mjs /src/index.js \
     && node /tmp/harden-logical-source-selection.mjs /src/index.js \
+    && node /tmp/rerank-logical-variants-after-failure.mjs /src/index.js \
     && node /tmp/delay-hls-live-edge.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
@@ -88,6 +90,8 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "VAVOO_LOGICAL_PLAYLIST_STALL_SECONDS" /src/index.js \
     && grep -q "logical playlist stalled" /src/index.js \
     && grep -q "logical state keeps preferred variant" /src/index.js \
+    && grep -q "logical candidate reranking" /src/index.js \
+    && grep -q "logical active quality error revalidation" /src/index.js \
     && grep -q "VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS" /src/index.js \
     && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
     && grep -q "safety_delay=" /src/index.js \
