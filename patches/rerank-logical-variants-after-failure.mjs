@@ -120,13 +120,19 @@ function getLogicalVariantsFromCachedQuality(group) {
         ...allowedQuarantined
     ];
 }
+
+function logicalLivePlaylistHasEndList(playlist) {
+    return String(playlist || '')
+        .split(/\r?\n/)
+        .some((line) => line.trim().toUpperCase() === '#EXT-X-ENDLIST');
+}
 `;
 
 replaceExactlyOnce(
   '\nasync function fetchLogicalChannelPlaylist(req, group) {',
   '\n' + cachedRerankHelpers +
     '\nasync function fetchLogicalChannelPlaylist(req, group) {',
-  'cached logical reranking helper insertion'
+  'cached logical reranking and live-ENDLIST helpers insertion'
 );
 
 replaceExactlyOnce(
@@ -166,16 +172,64 @@ replaceExactlyOnce(
   'dynamic logical candidate reranking loop'
 );
 
+replaceExactlyOnce(
+  `        try {
+            const upstream = await fetchChannelPlaylist(req, variant);
+
+            if (upstream.stale) {`,
+  `        try {
+            const upstream = await fetchChannelPlaylist(req, variant);
+
+            // EN: A logical group represents a live TV channel. ENDLIST means
+            // this particular upstream variant has terminated and must never be
+            // forwarded to Kodi as a normal end-of-program signal.
+            // FR : Un groupe logique représente une chaîne TV en direct.
+            // ENDLIST signifie que cette variante amont est terminée et ne doit
+            // jamais être transmise à Kodi comme une fin de programme normale.
+            if (logicalLivePlaylistHasEndList(upstream.playlist)) {
+                const debugInfo = getPlaylistDebugInfo(upstream.playlist);
+                cache.del(getStreamUrlCacheKey(variant));
+                cache.del(getPlaylistCacheKey(variant));
+                logicalPlaylistProgress.delete(
+                    getLogicalPlaylistProgressKey(group, variant)
+                );
+                logicalMediaHealth.delete(
+                    getLogicalMediaHealthKey(group, variant)
+                );
+                lastError = new Error(
+                    'live playlist advertised EXT-X-ENDLIST'
+                );
+                console.log(
+                    '[vavoo] logical live playlist ended "' + group.name +
+                    '" variant="' + variant.name +
+                    '" sequence=' + debugInfo.sequence +
+                    ' entries=' + debugInfo.segments
+                );
+                markLogicalVariantFailure(
+                    group,
+                    variant,
+                    'live playlist advertised EXT-X-ENDLIST'
+                );
+                continue;
+            }
+
+            if (upstream.stale) {`,
+  'logical live ENDLIST rejection hook'
+);
+
 if (
   !source.includes('logical candidate reranking') ||
   !source.includes('getLogicalVariantsFromCachedQuality') ||
   !source.includes('logical active quality error revalidation') ||
-  !source.includes('attemptedVariantIds')
+  !source.includes('attemptedVariantIds') ||
+  !source.includes('logicalLivePlaylistHasEndList') ||
+  !source.includes('logical live playlist ended') ||
+  !source.includes('live playlist advertised EXT-X-ENDLIST')
 ) {
-  throw new Error('logical reranking-after-failure verification failed');
+  throw new Error('logical reranking-after-failure and live-ENDLIST verification failed');
 }
 
 writeFileSync(target, source, 'utf8');
 console.log(
-  '[therand] patched dynamic reranking after logical variant failure: ' + target
+  '[therand] patched dynamic reranking after logical variant failure and live ENDLIST rejection: ' + target
 );
