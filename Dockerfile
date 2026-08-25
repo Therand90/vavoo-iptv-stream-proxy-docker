@@ -30,6 +30,7 @@ COPY patches/stabilize-logical-active-variant.mjs /tmp/stabilize-logical-active-
 COPY patches/persist-logical-state.mjs /tmp/persist-logical-state.mjs
 COPY patches/harden-logical-source-selection.mjs /tmp/harden-logical-source-selection.mjs
 COPY patches/rerank-logical-variants-after-failure.mjs /tmp/rerank-logical-variants-after-failure.mjs
+COPY patches/harden-logical-failover-continuity.mjs /tmp/harden-logical-failover-continuity.mjs
 COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
@@ -60,6 +61,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/persist-logical-state.mjs /src/index.js \
     && node /tmp/harden-logical-source-selection.mjs /src/index.js \
     && node /tmp/rerank-logical-variants-after-failure.mjs /src/index.js \
+    && node /tmp/harden-logical-failover-continuity.mjs /src/index.js \
     && node /tmp/delay-hls-live-edge.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
@@ -76,6 +78,9 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "logical loop confirmed" /src/index.js \
     && grep -q "logical timeline discontinuity" /src/index.js \
     && grep -q "lastSourceFirst" /src/index.js \
+    && grep -q "EXT-X-DISCONTINUITY-SEQUENCE" /src/index.js \
+    && grep -q "logical stale in-flight result ignored" /src/index.js \
+    && grep -q "logical playlist window collapse confirmed" /src/index.js \
     && grep -q "logical quality ranking" /src/index.js \
     && grep -q "logical quality probe" /src/index.js \
     && grep -q "logical audio language blocked every variant" /src/index.js \
