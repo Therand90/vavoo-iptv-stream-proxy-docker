@@ -32,6 +32,7 @@ COPY patches/harden-logical-source-selection.mjs /tmp/harden-logical-source-sele
 COPY patches/rerank-logical-variants-after-failure.mjs /tmp/rerank-logical-variants-after-failure.mjs
 COPY patches/harden-logical-failover-continuity.mjs /tmp/harden-logical-failover-continuity.mjs
 COPY patches/delay-hls-live-edge.mjs /tmp/delay-hls-live-edge.mjs
+COPY patches/harden-logical-failover-transition.mjs /tmp/harden-logical-failover-transition.mjs
 
 RUN test -n "${UPSTREAM_REF}" \
     && apt-get update \
@@ -63,6 +64,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/rerank-logical-variants-after-failure.mjs /src/index.js \
     && node /tmp/harden-logical-failover-continuity.mjs /src/index.js \
     && node /tmp/delay-hls-live-edge.mjs /src/index.js \
+    && node /tmp/harden-logical-failover-transition.mjs /src/index.js \
     && grep -q "hls asset prefetched" /src/index.js \
     && grep -q "removeListener('close', onSocketClose)" /src/index.js \
     && grep -q "VAVOO_HLS_PREFETCH_SEGMENT_COUNT" /src/index.js \
@@ -81,6 +83,9 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "EXT-X-DISCONTINUITY-SEQUENCE" /src/index.js \
     && grep -q "logical stale in-flight result ignored" /src/index.js \
     && grep -q "logical playlist window collapse confirmed" /src/index.js \
+    && grep -q "logical live-edge buffer drain" /src/index.js \
+    && grep -q "logical fast failover probe" /src/index.js \
+    && grep -q "bothAudioUnknown" /src/index.js \
     && grep -q "logical quality ranking" /src/index.js \
     && grep -q "logical quality probe" /src/index.js \
     && grep -q "logical audio language blocked every variant" /src/index.js \
