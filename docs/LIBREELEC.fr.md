@@ -5,7 +5,7 @@
 L’extension Docker de LibreELEC fournit le moteur Docker, mais certaines installations n’incluent pas la commande `docker compose`. Ce dépôt fournit donc un gestionnaire natif `/bin/sh` capable d’installer, mettre à jour, valider et supprimer le conteneur avec les commandes Docker ordinaires.
 
 > [!IMPORTANT]
-> L’image actuellement publiée cible `linux/amd64`. Ce guide est donc destiné aux systèmes LibreELEC x86_64, par exemple les mini-PC Intel et AMD. La prise en charge ARM nécessitera une future image multiarchitecture.
+> L’image Docker prend en charge `linux/amd64` et `linux/arm64` (ARM 64 bits), avec sélection automatique par Docker. Votre appareil LibreELEC doit disposer d’une extension Docker fonctionnelle. ARM 32 bits (`arm/v7`) n’est pas pris en charge.
 
 ## 1. Installer Docker et activer SSH
 

@@ -57,7 +57,7 @@ Some LibreELEC Docker add-on installations provide the Docker engine without the
 - [LibreELEC installation guide](docs/LIBREELEC.md)
 - [Guide d’installation LibreELEC](docs/LIBREELEC.fr.md)
 
-The currently published image targets `linux/amd64`, so this path is intended for x86_64 LibreELEC systems such as Intel and AMD mini-PCs.
+The Docker image supports `linux/amd64` (x86_64) and `linux/arm64` (64-bit ARM). Docker automatically selects the matching image under the same `latest` tag. On LibreELEC, the Docker add-on must be available for your device; 32-bit ARM (`arm/v7`) is not supported.
 
 The default configuration listens only on the local loopback interface:
 
