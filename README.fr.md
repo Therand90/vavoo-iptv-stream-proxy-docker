@@ -57,7 +57,7 @@ Certaines installations de l’extension Docker LibreELEC fournissent le moteur 
 - [Guide d’installation LibreELEC](docs/LIBREELEC.fr.md)
 - [LibreELEC installation guide](docs/LIBREELEC.md)
 
-L’image actuellement publiée cible `linux/amd64`. Cette méthode est donc destinée aux systèmes LibreELEC x86_64, notamment les mini-PC Intel et AMD.
+L’image Docker prend en charge `linux/amd64` (x86_64) et `linux/arm64` (ARM 64 bits). Docker sélectionne automatiquement la bonne architecture sous le même tag `latest`. Sur LibreELEC, l’extension Docker doit être disponible pour votre appareil ; ARM 32 bits (`arm/v7`) n’est pas pris en charge.
 
 La configuration par défaut écoute uniquement sur l’interface de boucle locale :
 

@@ -5,7 +5,7 @@
 LibreELEC's Docker add-on provides the Docker engine, but some installations do not include the `docker compose` command. This repository therefore ships a native `/bin/sh` helper that installs, updates, validates and removes the container with ordinary Docker commands.
 
 > [!IMPORTANT]
-> The currently published image targets `linux/amd64`. This guide is therefore intended for x86_64 LibreELEC systems such as Intel and AMD mini-PCs. ARM support requires a future multi-architecture image.
+> The Docker image supports `linux/amd64` and `linux/arm64` (64-bit ARM), automatically selected by Docker. Your LibreELEC device must have a working Docker add-on. 32-bit ARM (`arm/v7`) is not supported.
 
 ## 1. Install Docker and enable SSH
 
