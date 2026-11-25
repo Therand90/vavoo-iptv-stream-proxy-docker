@@ -210,7 +210,7 @@ jobs:
   publish:
     name: Publish image with attestations
     needs: [validate, validate_arm64]
-    if: needs.validate.outputs.should_build == 'true' && github.event_name != 'pull_request'
+    if: needs.validate.outputs.should_build == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

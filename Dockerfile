@@ -16,6 +16,7 @@ COPY patches/dependencies/package.json /tmp/validated-dependencies/package.json
 COPY patches/dependencies/package-lock.json /tmp/validated-dependencies/package-lock.json
 
 COPY patches/extend-catalog-cache.mjs /tmp/extend-catalog-cache.mjs
+COPY patches/enforce-tls-verification.mjs /tmp/enforce-tls-verification.mjs
 COPY patches/renew-hourly-hls.mjs /tmp/renew-hourly-hls.mjs
 COPY patches/harden-hls-retries.mjs /tmp/harden-hls-retries.mjs
 COPY patches/harden-hls-assets.mjs /tmp/harden-hls-assets.mjs
@@ -51,6 +52,7 @@ RUN test -n "${UPSTREAM_REF}" \
          cmp package.json /tmp/validated-dependencies/package.json && \
          cp /tmp/validated-dependencies/package-lock.json package-lock.json; \
        fi \
+    && node /tmp/enforce-tls-verification.mjs /src/index.js \
     && node /tmp/extend-catalog-cache.mjs /src/index.js \
     && node /tmp/renew-hourly-hls.mjs /src/index.js \
     && node /tmp/harden-hls-retries.mjs /src/index.js \
@@ -113,6 +115,8 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS" /src/index.js \
     && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
     && grep -q "safety_delay=" /src/index.js \
+    && grep -Fq "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';" /src/index.js \
+    && ! grep -Fq "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';" /src/index.js \
     && npm ci --omit=dev \
     && npm audit --omit=dev \
     && npm ls --omit=dev \
