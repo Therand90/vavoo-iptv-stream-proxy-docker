@@ -109,6 +109,64 @@ function writeChannelsSnapshot(channels) {
     }
 }
 
+// Secondary catalog format, kept separate from the regular signed resolver.
+// Do not write fallback data over the last authoritative catalog snapshot.
+async function loadLive2Catalog() {
+    const response = await fetch('https://vavoo.to/live2/index?output=json', {
+        signal: AbortSignal.timeout(15000),
+        headers: { accept: 'application/json' }
+    });
+    if (!response.ok) {
+        throw new Error('live2 index HTTP ' + response.status);
+    }
+    const rows = await response.json();
+    if (!Array.isArray(rows) || !rows.length) {
+        throw new Error('live2 index is not a nonempty array');
+    }
+
+    const channels = [];
+    for (const item of rows) {
+        if (!item || typeof item.name !== 'string' || !item.name.trim() ||
+            typeof item.group !== 'string' || !item.group.trim() ||
+            typeof item.url !== 'string') {
+            continue;
+        }
+
+        let source;
+        try {
+            source = new URL(item.url);
+        } catch {
+            continue;
+        }
+        if (!['http:', 'https:'].includes(source.protocol) ||
+            !['vavoo.to', 'kool.to', 'geil.to'].includes(source.hostname)) {
+            continue;
+        }
+        const pieces = source.pathname.split('/');
+        if (pieces[1] !== 'live2' || pieces[2] !== 'play3' ||
+            !/^[0-9]+$/.test(pieces[3] || '')) {
+            continue;
+        }
+
+        // Keep the existing stable channel and logical group ID algorithm.
+        // Convert to the canonical input for the existing signed resolver.
+        channels.push(mapCatalogItem({
+            name: item.name,
+            group: item.group,
+            logo: typeof item.logo === 'string' ? item.logo : '',
+            url: 'https://vavoo.to/vavoo-iptv/play/' + pieces[3] + '000000000000'
+        }));
+    }
+
+    // Reject a truncated or unrecognized response instead of replacing the
+    // previously usable catalog with an incomplete result.
+    if (channels.length < 1000 || channels.length < rows.length * 0.7) {
+        throw new Error('live2 index contains too few compatible entries: ' +
+            channels.length + '/' + rows.length);
+    }
+    return channels;
+}
+
 async function refreshChannelsCatalog() {
     if (channelsLoadInflight) {
         console.log('[vavoo] channels load joined existing request');
@@ -121,6 +179,9 @@ async function refreshChannelsCatalog() {
         for (const baseUrl of baseSites) {
             try {
                 const channels = await loadCatalogFromBase(baseUrl, signature);
+                if (!channels.length) {
+                    throw new Error('empty catalog');
+                }
                 cache.set(
                     CHANNELS_CACHE_KEY,
                     channels,
@@ -138,6 +199,15 @@ async function refreshChannelsCatalog() {
                     error.message
                 );
             }
+        }
+
+        try {
+            const channels = await loadLive2Catalog();
+            cache.set(CHANNELS_CACHE_KEY, channels, 300);
+            console.log('[vavoo] fallback catalog loaded: ' + channels.length);
+            return channels;
+        } catch (error) {
+            console.log('[vavoo] fallback catalog failed: ' + error.message);
         }
 
         throw new Error('Unable to load channel catalog');
