@@ -11,6 +11,10 @@ ARG UPSTREAM_REF
 
 WORKDIR /src
 
+# Exact dependency snapshot validated for the recovery release; never overwrite a newer upstream lockfile.
+COPY patches/dependencies/package.json /tmp/validated-dependencies/package.json
+COPY patches/dependencies/package-lock.json /tmp/validated-dependencies/package-lock.json
+
 COPY patches/extend-catalog-cache.mjs /tmp/extend-catalog-cache.mjs
 COPY patches/renew-hourly-hls.mjs /tmp/renew-hourly-hls.mjs
 COPY patches/harden-hls-retries.mjs /tmp/harden-hls-retries.mjs
@@ -43,6 +47,10 @@ RUN test -n "${UPSTREAM_REF}" \
        | tar --extract --gzip --strip-components=1 --directory /src \
     && test -f package.json \
     && test -f package-lock.json \
+    && if [ "${UPSTREAM_REPO}" = "Haehnchen/vavoo-iptv-stream-proxy" ] && [ "${UPSTREAM_REF}" = "4dc8ece08a075944fad95681784475431450279a" ]; then \
+         cmp package.json /tmp/validated-dependencies/package.json && \
+         cp /tmp/validated-dependencies/package-lock.json package-lock.json; \
+       fi \
     && node /tmp/extend-catalog-cache.mjs /src/index.js \
     && node /tmp/renew-hourly-hls.mjs /src/index.js \
     && node /tmp/harden-hls-retries.mjs /src/index.js \
@@ -106,6 +114,8 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
     && grep -q "safety_delay=" /src/index.js \
     && npm ci --omit=dev \
+    && npm audit --omit=dev \
+    && npm ls --omit=dev \
     && node --check index.js \
     && npm cache clean --force
 
