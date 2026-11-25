@@ -36,19 +36,14 @@ const CHANNELS_CACHE_TTL_SECONDS = (() => {
 })();
 const CHANNELS_SNAPSHOT_FILE = '/data/channels-cache.json';
 const CHANNELS_SNAPSHOT_MAX_AGE_SECONDS = 172800;
+const CHANNELS_SNAPSHOT_ERROR_MAX_AGE_SECONDS = 14 * 86400;
 let channelsLoadInflight = null;
-let channelsSnapshotChecked = false;
 const SIGNATURE_CACHE_KEY = 'vavoo_addon_sig';`,
   'catalog cache constant insertion'
 );
 
 const catalogHelpers = `
-function readChannelsSnapshot() {
-    if (channelsSnapshotChecked) {
-        return null;
-    }
-    channelsSnapshotChecked = true;
-
+function readChannelsSnapshot(allowExpired = false) {
     try {
         const fileSystem = require('node:fs');
         if (!fileSystem.existsSync(CHANNELS_SNAPSHOT_FILE)) {
@@ -65,7 +60,10 @@ function readChannelsSnapshot() {
         }
 
         const ageSeconds = Math.max(0, Math.floor((Date.now() - savedAt) / 1000));
-        if (ageSeconds > CHANNELS_SNAPSHOT_MAX_AGE_SECONDS) {
+        const maxAge = allowExpired
+            ? CHANNELS_SNAPSHOT_ERROR_MAX_AGE_SECONDS
+            : CHANNELS_SNAPSHOT_MAX_AGE_SECONDS;
+        if (ageSeconds >= maxAge) {
             console.log(
                 '[vavoo] channels snapshot ignored age=' + ageSeconds + 's'
             );
@@ -74,8 +72,8 @@ function readChannelsSnapshot() {
 
         const stale = ageSeconds >= CHANNELS_CACHE_TTL_SECONDS;
         const ttlSeconds = stale
-            ? 300
-            : Math.max(300, CHANNELS_CACHE_TTL_SECONDS - ageSeconds);
+            ? Math.min(300, maxAge - ageSeconds)
+            : Math.min(maxAge - ageSeconds, Math.max(1, CHANNELS_CACHE_TTL_SECONDS - ageSeconds));
         cache.set(CHANNELS_CACHE_KEY, channels, ttlSeconds);
         console.log(
             '[vavoo] channels snapshot restored: ' + channels.length +
@@ -121,6 +119,9 @@ async function refreshChannelsCatalog() {
         for (const baseUrl of baseSites) {
             try {
                 const channels = await loadCatalogFromBase(baseUrl, signature);
+                if (!Array.isArray(channels) || !channels.length) {
+                    throw new Error('empty or invalid catalog');
+                }
                 cache.set(
                     CHANNELS_CACHE_KEY,
                     channels,
@@ -141,7 +142,12 @@ async function refreshChannelsCatalog() {
         }
 
         throw new Error('Unable to load channel catalog');
-    })();
+    })().catch((error) => {
+        const snapshot = readChannelsSnapshot(true);
+        if (!snapshot) throw error;
+        console.log('[vavoo] degraded catalog: using last saved snapshot after refresh failure: ' + error.message);
+        return snapshot.channels;
+    });
 
     try {
         return await channelsLoadInflight;
