@@ -46,11 +46,11 @@ Keep the normal loopback binding for Kodi and set an optional second bind when a
 
 ```dotenv
 VAVOO_BIND_ADDRESS=127.0.0.1
-VAVOO_WIREGUARD_BIND_ADDRESS=10.13.13.2
+VAVOO_WIREGUARD_BIND_ADDRESS=192.0.2.2
 VAVOO_PORT=8899
 ```
 
-The LibreELEC helper then publishes both `127.0.0.1:8899` and `10.13.13.2:8899` to container port `8888`. This preserves local Kodi access while exposing the service only on the selected WireGuard interface for trusted remote checks.
+The LibreELEC helper then publishes both `127.0.0.1:8899` and `192.0.2.2:8899` to container port `8888`. This preserves local Kodi access while exposing the service only on the selected WireGuard interface for trusted remote checks.
 
 Leave `VAVOO_WIREGUARD_BIND_ADDRESS` empty when it is not needed. The helper rejects `0.0.0.0` for this secondary binding; never use a public address there.
 

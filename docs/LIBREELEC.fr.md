@@ -46,11 +46,11 @@ Conservez la liaison locale normale pour Kodi et définissez une seconde liaison
 
 ```dotenv
 VAVOO_BIND_ADDRESS=127.0.0.1
-VAVOO_WIREGUARD_BIND_ADDRESS=10.13.13.2
+VAVOO_WIREGUARD_BIND_ADDRESS=192.0.2.2
 VAVOO_PORT=8899
 ```
 
-Le gestionnaire LibreELEC publie alors à la fois `127.0.0.1:8899` et `10.13.13.2:8899` vers le port `8888` du conteneur. Kodi conserve donc son accès local tandis que le service n’est exposé à distance que sur l’interface WireGuard choisie.
+Le gestionnaire LibreELEC publie alors à la fois `127.0.0.1:8899` et `192.0.2.2:8899` vers le port `8888` du conteneur. Kodi conserve donc son accès local tandis que le service n’est exposé à distance que sur l’interface WireGuard choisie.
 
 Laissez `VAVOO_WIREGUARD_BIND_ADDRESS` vide lorsqu’elle n’est pas nécessaire. Le gestionnaire refuse `0.0.0.0` pour cette seconde liaison ; n’utilisez jamais une adresse publique à cet endroit.
 
