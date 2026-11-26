@@ -11,7 +11,12 @@ ARG UPSTREAM_REF
 
 WORKDIR /src
 
+# Exact dependency snapshot validated for the recovery release; never overwrite a newer upstream lockfile.
+COPY patches/dependencies/package.json /tmp/validated-dependencies/package.json
+COPY patches/dependencies/package-lock.json /tmp/validated-dependencies/package-lock.json
+
 COPY patches/extend-catalog-cache.mjs /tmp/extend-catalog-cache.mjs
+COPY patches/enforce-tls-verification.mjs /tmp/enforce-tls-verification.mjs
 COPY patches/renew-hourly-hls.mjs /tmp/renew-hourly-hls.mjs
 COPY patches/harden-hls-retries.mjs /tmp/harden-hls-retries.mjs
 COPY patches/harden-hls-assets.mjs /tmp/harden-hls-assets.mjs
@@ -21,6 +26,7 @@ COPY patches/harden-hls-playlist-latency.mjs /tmp/harden-hls-playlist-latency.mj
 COPY patches/hedge-hls-prefetch.mjs /tmp/hedge-hls-prefetch.mjs
 COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 COPY patches/group-logical-channels.mjs /tmp/group-logical-channels.mjs
+COPY patches/adapt-mediahub-v2.mjs /tmp/adapt-mediahub-v2.mjs
 COPY patches/detect-looping-variants.mjs /tmp/detect-looping-variants.mjs
 COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
 COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
@@ -43,6 +49,11 @@ RUN test -n "${UPSTREAM_REF}" \
        | tar --extract --gzip --strip-components=1 --directory /src \
     && test -f package.json \
     && test -f package-lock.json \
+    && if [ "${UPSTREAM_REPO}" = "Haehnchen/vavoo-iptv-stream-proxy" ] && [ "${UPSTREAM_REF}" = "4dc8ece08a075944fad95681784475431450279a" ]; then \
+         cmp package.json /tmp/validated-dependencies/package.json && \
+         cp /tmp/validated-dependencies/package-lock.json package-lock.json; \
+       fi \
+    && node /tmp/enforce-tls-verification.mjs /src/index.js \
     && node /tmp/extend-catalog-cache.mjs /src/index.js \
     && node /tmp/renew-hourly-hls.mjs /src/index.js \
     && node /tmp/harden-hls-retries.mjs /src/index.js \
@@ -53,6 +64,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/hedge-hls-prefetch.mjs /src/index.js \
     && node /tmp/sign-hls-proxy-urls.mjs /src/index.js \
     && node /tmp/group-logical-channels.mjs /src/index.js \
+    && node /tmp/adapt-mediahub-v2.mjs /src/index.js \
     && node /tmp/detect-looping-variants.mjs /src/index.js \
     && node /tmp/fix-logical-timeline.mjs /src/index.js \
     && node /tmp/rank-logical-variants.mjs /src/index.js \
@@ -105,7 +117,11 @@ RUN test -n "${UPSTREAM_REF}" \
     && grep -q "VAVOO_HLS_LIVE_EDGE_DELAY_SEGMENTS" /src/index.js \
     && grep -q "X-Therand-Vavoo-Live-Edge-Delay-Segments" /src/index.js \
     && grep -q "safety_delay=" /src/index.js \
+    && grep -Fq "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';" /src/index.js \
+    && ! grep -Fq "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';" /src/index.js \
     && npm ci --omit=dev \
+    && npm audit --omit=dev \
+    && npm ls --omit=dev \
     && node --check index.js \
     && npm cache clean --force
 
