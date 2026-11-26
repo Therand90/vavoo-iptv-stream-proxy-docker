@@ -21,6 +21,7 @@ COPY patches/harden-hls-playlist-latency.mjs /tmp/harden-hls-playlist-latency.mj
 COPY patches/hedge-hls-prefetch.mjs /tmp/hedge-hls-prefetch.mjs
 COPY patches/sign-hls-proxy-urls.mjs /tmp/sign-hls-proxy-urls.mjs
 COPY patches/group-logical-channels.mjs /tmp/group-logical-channels.mjs
+COPY patches/adapt-mediahub-v2.mjs /tmp/adapt-mediahub-v2.mjs
 COPY patches/detect-looping-variants.mjs /tmp/detect-looping-variants.mjs
 COPY patches/fix-logical-timeline.mjs /tmp/fix-logical-timeline.mjs
 COPY patches/rank-logical-variants-v2.mjs /tmp/rank-logical-variants.mjs
@@ -53,6 +54,7 @@ RUN test -n "${UPSTREAM_REF}" \
     && node /tmp/hedge-hls-prefetch.mjs /src/index.js \
     && node /tmp/sign-hls-proxy-urls.mjs /src/index.js \
     && node /tmp/group-logical-channels.mjs /src/index.js \
+    && node /tmp/adapt-mediahub-v2.mjs /src/index.js \
     && node /tmp/detect-looping-variants.mjs /src/index.js \
     && node /tmp/fix-logical-timeline.mjs /src/index.js \
     && node /tmp/rank-logical-variants.mjs /src/index.js \
